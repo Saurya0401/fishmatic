@@ -1,0 +1,203 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+
+import 'package:fishmatic/data_models.dart'
+    show BaseDataModel, Schedule, LEDPattern;
+import 'package:fishmatic/data_access.dart';
+import 'package:fishmatic/exceptions.dart';
+
+class Setup {
+  static void setup({required String ssid, required String pass}) async {
+    try {
+      BluetoothConnection bCnxn =
+          await BluetoothConnection.toAddress('5c:17:cf:82:c3:d9');
+      print("Connected");
+      bCnxn.output
+          .add(Uint8List.fromList(utf8.encode(ssid + '\n' + pass + '!')));
+      //todo: receive acknoledgement
+    } catch (exception) {
+      print("Error.");
+    }
+  }
+}
+
+class StatusMonitor {}
+
+abstract class BaseManager {
+  final int limit;
+  final String dataType;
+  final BaseDAO dataAccess;
+
+  BaseManager(this.limit, this.dataType, this.dataAccess);
+
+  Future<List<dynamic>> get dataList async =>
+      (await dataAccess.dataMap).values.toList();
+
+  Future<int> get numData async => (await dataList).length;
+
+  Future<void> newData(BaseDataModel data) async {
+    final Map<String, dynamic> _dataMap = await dataAccess.dataMap;
+    if (_dataMap.keys.length == limit)
+      throw MaxItemLimitException(dataType, limit);
+    if (await dataExists(data.name))
+      throw DuplicateNameException(dataType, data.name);
+    await dataAccess.addData(data);
+    if (await numData == 1) await dataAccess.addData(data, addActive: true);
+  }
+
+  Future<void> editData(
+      String dataName, Map<String, dynamic> editFields) async {
+    if (!(await dataExists(dataName)))
+      throw NotFoundException(dataType, dataName);
+    await dataAccess.updateData(dataName, editFields);
+  }
+
+  Future<void> deleteData(String dataName) async {
+    final Map<String, dynamic> _dataMap = await dataAccess.dataMap;
+    if (_dataMap.keys.length == 0) throw MinItemLimitException(dataType, 1);
+    if (!(await dataExists(dataName, _dataMap)))
+      throw NotFoundException(dataType, dataName);
+    await dataAccess.deleteData(dataName);
+    if (await numData == 0)
+      await dataAccess.deleteData((await currentActive()).name,
+          deleteActive: true);
+  }
+
+  Future<void> changeActive(BaseDataModel data) async {
+    await dataAccess.deleteData((await currentActive()).name,
+        deleteActive: true);
+    await dataAccess.addData(data, addActive: true);
+  }
+
+  Future<bool> dataExists(String dataName,
+      [Map<String, dynamic>? dataMap]) async {
+    final Map<String, dynamic> _dataMap =
+        dataMap != null ? dataMap : await dataAccess.dataMap;
+    return _dataMap.containsKey(dataName);
+  }
+
+  Future<dynamic> currentActive() async =>
+      (await dataAccess.dataMap)[await dataAccess.activeName]!;
+}
+
+class ScheduleManager {
+  static final int limit = 5;
+  final String dataType = 'Schedule';
+  final ScheduleDAO dataAccess;
+
+  ScheduleManager(this.dataAccess);
+
+  Future<List<Schedule>> get schedules async =>
+      (await dataAccess.dataMap).values.toList();
+
+  Future<int> get numSchedules async => (await schedules).length;
+
+  Future<void> newSchedule(Schedule schedule) async {
+    final Map<String, Schedule> schedules = await dataAccess.dataMap;
+    if (schedules.keys.length == limit)
+      throw MaxItemLimitException(dataType, limit);
+    if (await scheduleExists(schedule.name, schedules))
+      throw DuplicateNameException(dataType, schedule.name);
+    await dataAccess.addData(schedule);
+    if (schedules.keys.length == 1)
+      await dataAccess.addData(schedule, addActive: true);
+  }
+
+  Future<void> editSchedule(
+      String scheduleName, Map<String, dynamic> editFields) async {
+    if (!(await scheduleExists(scheduleName)))
+      throw NotFoundException(dataType, scheduleName);
+    await dataAccess.updateData(scheduleName, editFields);
+  }
+
+  Future<void> deleteSchedule(String scheduleName) async {
+    final Map<String, Schedule> schedules = await dataAccess.dataMap;
+    if (schedules.keys.length == 0) throw MinItemLimitException(dataType, 1);
+    if (!(await scheduleExists(scheduleName, schedules)))
+      throw NotFoundException(dataType, scheduleName);
+    await dataAccess.deleteData(scheduleName);
+    if (schedules.keys.length == 0)
+      await dataAccess.deleteData((await currentActive()).name,
+          deleteActive: true);
+  }
+
+  Future<void> changeActive(Schedule schedule) async {
+    await dataAccess.deleteData((await currentActive()).name,
+        deleteActive: true);
+    await dataAccess.addData(schedule, addActive: true);
+  }
+
+  Future<bool> scheduleExists(String scheduleName,
+      [Map<String, Schedule>? schedules]) async {
+    final Map<String, Schedule> _schedules =
+        schedules != null ? schedules : await dataAccess.dataMap;
+    return _schedules.containsKey(scheduleName);
+  }
+
+  Future<Schedule> currentActive() async =>
+      (await dataAccess.dataMap)[await dataAccess.activeName]!;
+}
+
+class LEDManager {
+  static final int limit = 10;
+  final String dataType = 'LED Pattern';
+  final LEDPatternDAO dataAccess;
+
+  LEDManager(this.dataAccess);
+
+  Future<List<LEDPattern>> get patterns async =>
+      (await dataAccess.dataMap).values.toList();
+
+  Future<int> get numPatterns async => (await patterns).length;
+
+  Future<void> newPattern(LEDPattern pattern) async {
+    final Map<String, LEDPattern> patterns = await dataAccess.dataMap;
+    if (patterns.keys.length == limit)
+      throw MaxItemLimitException(dataType, limit);
+    if (await patternExists(pattern.name, patterns))
+      throw DuplicateNameException(dataType, pattern.name);
+    await dataAccess.addData(pattern);
+    if (patterns.keys.length == 1)
+      await dataAccess.addData(pattern, addActive: true);
+  }
+
+  Future<void> editPattern(
+      String patternName, Map<String, dynamic> editFields) async {
+    if (!(await patternExists(patternName)))
+      throw NotFoundException(dataType, patternName);
+    await dataAccess.updateData(patternName, editFields);
+  }
+
+  Future<void> deletePattern(String patternName) async {
+    final Map<String, LEDPattern> _patternsMap = await dataAccess.dataMap;
+    if (_patternsMap.keys.length == 0) throw MinItemLimitException(dataType, 1);
+    if (!(await patternExists(patternName, _patternsMap)))
+      throw NotFoundException(dataType, patternName);
+    await dataAccess.deleteData(patternName);
+    if (_patternsMap.keys.length == 0)
+      await dataAccess.deleteData((await currentActive()).name,
+          deleteActive: true);
+  }
+
+  Future<void> changeActive(LEDPattern pattern) async {
+    await dataAccess.deleteData((await currentActive()).name,
+        deleteActive: true);
+    await dataAccess.addData(pattern, addActive: true);
+  }
+
+  Future<bool> patternExists(String patternName,
+      [Map<String, LEDPattern>? patternsMap]) async {
+    final Map<String, LEDPattern> _patternsMap =
+        patternsMap != null ? patternsMap : await dataAccess.dataMap;
+    return _patternsMap.containsKey(patternName);
+  }
+
+  Future<LEDPattern> currentActive() async =>
+      (await dataAccess.dataMap)[await dataAccess.activeName]!;
+}
+
+void main() {
+  Setup.setup(ssid: 'ssid', pass: 'pass');
+}
