@@ -1,3 +1,4 @@
+import 'package:fishmatic/backend/exceptions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 
@@ -10,26 +11,40 @@ class ButtonInfo {
 }
 
 AlertDialog errorAlert(
-        {required String title, required String text, BuildContext? context}) =>
+  Object error, {
+  String? title,
+  BuildContext? context,
+}) =>
     AlertDialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 24.0),
+      contentPadding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
       title: Text(
-        title,
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-      ),
-      content: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 14),
-          ),
+        error is FishmaticBaseException ? error.title : title ?? 'Error',
+        style: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.red,
         ),
       ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            error is FishmaticBaseException
+                ? error.errorText
+                : error.toString(),
+            style: TextStyle(fontSize: 18),
+          ),
+        ],
+      ),
       actions: <Widget>[
-        ElevatedButton(
-          onPressed: () =>
-              context == null ? SystemNavigator.pop() : Navigator.pop(context),
-          child: Text(context == null ? 'Exit' : 'Close'),
+        ListTile(
+          title: ElevatedButton(
+            onPressed: () => context == null
+                ? SystemNavigator.pop()
+                : Navigator.pop(context),
+            child: Text(context == null ? 'Exit' : 'Close'),
+          ),
         ),
       ],
     );
