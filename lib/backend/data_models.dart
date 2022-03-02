@@ -30,6 +30,12 @@ class Limits {
   static const double criticalHighTemp = 35.0;
 }
 
+class Timeouts {
+  static const Duration cnxn = Duration(seconds: 20);
+
+  Duration timeout(int seconds) => Duration(seconds: seconds);
+}
+
 class LightFlags {
   final bool _lightOnFlag;
   final bool _autoLightOnFlag;

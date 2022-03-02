@@ -1,14 +1,14 @@
+import 'package:fishmatic/backend/exceptions.dart';
 import 'package:flutter/material.dart';
 
 import 'package:fishmatic/backend/fishmatic.dart';
-import 'package:fishmatic/backend/data_models.dart' show Schedule;
+import 'package:fishmatic/backend/data_models.dart' show Schedule, Timeouts;
 import 'package:fishmatic/utils.dart';
 
 class SchedulesPage extends StatefulWidget {
   const SchedulesPage(this._sManager, {Key? key}) : super(key: key);
 
   final ScheduleManager _sManager;
-  static const String routeName = '/schedules';
 
   @override
   _SchedulesPageState createState() => _SchedulesPageState(_sManager);
@@ -25,7 +25,8 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
   @override
   void initState() {
-    _schedules = _sManager.schedules;
+    _schedules = _sManager.schedules.timeout(Timeouts.cnxn,
+        onTimeout: () => throw ConnectionTimeout('Error retrieving schedules'));
     super.initState();
   }
 
@@ -72,15 +73,20 @@ class _SchedulesPageState extends State<SchedulesPage> {
           builder: (BuildContext context, BoxConstraints viewportConstraints) =>
               SingleChildScrollView(
             child: FutureBuilder(
-              future: _refresh ? _sManager.schedules : _schedules,
+              future: _refresh
+                  ? _sManager.schedules.timeout(Timeouts.cnxn,
+                      onTimeout: () => throw ConnectionTimeout(
+                          'Failed to retrieve schedules'))
+                  : _schedules,
               builder: (BuildContext context,
                   AsyncSnapshot<List<Schedule>> snapshot) {
                 if (snapshot.hasError) {
                   print(snapshot.error);
                   return errorAlert(
-                      title: 'Error retrieving schedules',
-                      text: snapshot.error.toString(),
-                      context: context);
+                    snapshot.error!,
+                    title: 'Error Retrieving Schedules',
+                    context: context,
+                  );
                 } else if (snapshot.hasData) {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
@@ -135,11 +141,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   late String _endMinute;
   bool _addingSchedule = false;
   bool _validName = true, _validInterval = true, _validFood = true;
-  bool _scheduleModified = false;
 
   _ScheduleDialogState(this._sm, this._initial);
-
-  bool get modified => _scheduleModified;
 
   @override
   void initState() {
@@ -179,7 +182,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child:
-                      Text(_initial != null ? 'Edit Schedule' : 'New Schedule'),
+                      Text(_initial == null ? 'New Schedule' : 'Edit Schedule'),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
@@ -420,23 +423,38 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                       if (!_currentFocus.hasPrimaryFocus)
                         _currentFocus.unfocus();
                       setState(() => _addingSchedule = true);
-                      _initial != null
-                          ? await _sm
-                              .editSchedule(_nameCtrl.text, _initial!.name, {
-                              Schedule.intLabel:
-                                  double.parse(_intervalCtrl.text),
-                              Schedule.amtLabel: double.parse(_foodCtrl.text),
-                              Schedule.stmLabel:
-                                  _startHour + ':' + _startMinute,
-                              Schedule.etmLabel: _endHour + ':' + _endMinute,
-                            })
-                          : await _sm.newSchedule(Schedule(
-                              _nameCtrl.text,
-                              double.parse(_intervalCtrl.text),
-                              double.parse(_foodCtrl.text),
-                              startTime: _startHour + ':' + _startMinute,
-                              endTime: _endHour + ':' + _endMinute));
-                      await Future.delayed(Duration(seconds: 2));
+                      try {
+                        _initial == null
+                            ? await _sm
+                                .newSchedule(Schedule(
+                                    _nameCtrl.text,
+                                    double.parse(_intervalCtrl.text),
+                                    double.parse(_foodCtrl.text),
+                                    startTime: _startHour + ':' + _startMinute,
+                                    endTime: _endHour + ':' + _endMinute))
+                                .timeout(Timeouts.cnxn,
+                                    onTimeout: () => throw ConnectionTimeout(
+                                        'Failed to add schedule'))
+                            : await _sm
+                                .editSchedule(_nameCtrl.text, _initial!.name, {
+                                Schedule.intLabel:
+                                    double.parse(_intervalCtrl.text),
+                                Schedule.amtLabel: double.parse(_foodCtrl.text),
+                                Schedule.stmLabel:
+                                    _startHour + ':' + _startMinute,
+                                Schedule.etmLabel: _endHour + ':' + _endMinute,
+                              }).timeout(Timeouts.cnxn,
+                                    onTimeout: () => throw ConnectionTimeout(
+                                        'Failed to edit schedule'));
+                      } on ConnectionTimeout catch (error) {
+                        setState(() => _addingSchedule = false);
+                        showDialog(
+                            context: context,
+                            builder: (_) => errorAlert(
+                                  error,
+                                  context: context,
+                                ));
+                      }
                       Navigator.pop(context);
                     }
                   },
@@ -462,7 +480,7 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
 
   _ScheduleListDialogState(this._sm);
 
-  Future<List<SimpleDialogOption>> _scheduleOptions() async {
+  Future<List<SimpleDialogOption>> _scheduleList() async {
     List<SimpleDialogOption> scheduleOptions = [];
     (await _sm.schedules).forEach((schedule) {
       scheduleOptions.add(SimpleDialogOption(
@@ -476,7 +494,16 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
             ? null
             : () async {
                 setState(() => _updating = true);
-                await _sm.changeActive(schedule.name);
+                try {
+                  await _sm.changeActive(schedule.name);
+                } on ConnectionTimeout catch (error) {
+                  showDialog(
+                      context: context,
+                      builder: (_) => errorAlert(
+                            error,
+                            context: context,
+                          ));
+                }
                 Navigator.pop(context);
               },
       ));
@@ -487,15 +514,18 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: _scheduleOptions(),
+        future: _scheduleList().timeout(Timeouts.cnxn,
+            onTimeout: () =>
+                throw ConnectionTimeout('Failed to retrieve schedules')),
         builder: (BuildContext context,
             AsyncSnapshot<List<SimpleDialogOption>> snapshot) {
           if (snapshot.hasError) {
             print(snapshot.error);
             return errorAlert(
-                title: 'Error retrieving schedules',
-                text: snapshot.error.toString(),
-                context: context);
+              snapshot.error!,
+              title: 'Error Retrieving Schedules',
+              context: context,
+            );
           } else if (snapshot.hasData) {
             return SimpleDialog(
               title: const Text('Select schedule'),

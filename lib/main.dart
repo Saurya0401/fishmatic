@@ -18,7 +18,12 @@ Future<Fishmatic> initFishmatic() async {
   final FirebaseAuth _fbAuth = FirebaseAuth.instance;
   final User user = (await _fbAuth.signInAnonymously()).user!;
   final Fishmatic _fm = Fishmatic(user.uid);
-  await _fm.initialise();
+  await _fm.initialise().timeout(
+        // TODO: Default timeout values
+        Duration(seconds: 10),
+        onTimeout: () =>
+            throw ConnectionTimeout('Server initialisation failed'),
+      );
   return _fm;
 }
 
@@ -55,9 +60,7 @@ class _FishmaticAppState extends State<FishmaticApp> {
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               print(snapshot.error.toString());
-              return errorAlert(
-                  title: 'Initialisation error',
-                  text: snapshot.error.toString());
+              return errorAlert(snapshot.error!);
             } else if (snapshot.hasData) {
               final Fishmatic fishmatic = snapshot.data!;
               print('Signed in Anonymously as user ${fishmatic.userID}');
@@ -142,7 +145,9 @@ class _HomePageState extends State<HomePage> {
           maxCritical: Limits.criticalHighLight.toDouble(),
         ),
         (StreamData a, StreamData b, StreamData c) => [a, b, c]);
-    _activeSchedule = _scheduleManager.activeSchedule;
+    _activeSchedule = _scheduleManager.activeSchedule.timeout(Timeouts.cnxn,
+        onTimeout: () =>
+            throw ConnectionTimeout('Failed to retrieve active schedule'));
   }
 
   void _refresh() {
@@ -556,7 +561,9 @@ class _HomePageState extends State<HomePage> {
                       case ConnectionState.waiting:
                         _child = Padding(
                           padding: const EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(),
+                          child: Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         );
                         break;
                       case ConnectionState.none:
@@ -794,10 +801,15 @@ class _HomePageState extends State<HomePage> {
                                                 _currentFocus.unfocus();
                                               setState(() => _isFeeding = true);
                                               try {
-                                                await _fishmatic.feedFish(
-                                                    double.parse(
-                                                        _foodCtrl.text),
-                                                    _foodLevel);
+                                                await _fishmatic
+                                                    .feedFish(
+                                                        double.parse(
+                                                            _foodCtrl.text),
+                                                        _foodLevel)
+                                                    .timeout(Timeouts.cnxn,
+                                                        onTimeout: () =>
+                                                            throw ConnectionTimeout(
+                                                                'Fish feeding failed.'));
                                                 setState(() {
                                                   _done = true;
                                                   _statusText =
@@ -806,7 +818,12 @@ class _HomePageState extends State<HomePage> {
                                               } on CriticalFoodException catch (e) {
                                                 setState(() {
                                                   _fail = true;
-                                                  _statusText = e.message;
+                                                  _statusText = e.errorText;
+                                                });
+                                              } on ConnectionTimeout catch (e) {
+                                                setState(() {
+                                                  _fail = true;
+                                                  _statusText = e.errorText;
                                                 });
                                               }
                                             }
