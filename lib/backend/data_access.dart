@@ -17,7 +17,7 @@ class GenericDAO<T> {
   Future<void> init(T initValue, [String? childNode]) async {
     DatabaseReference ref =
         childNode == null ? baseRef : baseRef.child(childNode);
-    if ((await ref.once()).snapshot.value == null) ref.set(initValue);
+    if ((await ref.once()).snapshot.value == null) await ref.set(initValue);
   }
 
   Future<T> getValue([String? childNode]) async {
