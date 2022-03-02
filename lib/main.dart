@@ -19,8 +19,7 @@ Future<Fishmatic> initFishmatic() async {
   final User user = (await _fbAuth.signInAnonymously()).user!;
   final Fishmatic _fm = Fishmatic(user.uid);
   await _fm.initialise().timeout(
-        // TODO: Default timeout values
-        Duration(seconds: 10),
+        Timeouts.cnxn,
         onTimeout: () =>
             throw ConnectionTimeout('Server initialisation failed'),
       );
