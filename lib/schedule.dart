@@ -49,7 +49,63 @@ class _SchedulesPageState extends State<SchedulesPage> {
               setState(() {});
             });
           }, Theme.of(context).colorScheme.primary),
-          ButtonInfo('Delete', () {}, Colors.red)
+          ButtonInfo('Delete', () {
+            showDialog(
+              context: context,
+              builder: (BuildContext context) {
+                bool _deleting = false;
+                return StatefulBuilder(
+                  builder: (BuildContext context, StateSetter setState) =>
+                      AlertDialog(
+                    insetPadding: const EdgeInsets.symmetric(
+                        horizontal: 8.0, vertical: 24.0),
+                    contentPadding:
+                        const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
+                    title: Text('Delete Schedule'),
+                    content: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                          'Are you sure you want to delete this schedule?'),
+                    ),
+                    actions: <Widget>[
+                      TextButton(
+                          child: Text('Cancel'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      TextButton(
+                          child: _deleting
+                              ? Container(
+                                  width: 22.0,
+                                  height: 22.0,
+                                  child: CircularProgressIndicator(),
+                                )
+                              : Text('Delete'),
+                          onPressed: () async {
+                            setState(() => _deleting = true);
+                            try {
+                              await _sManager.deleteSchedule(schedule.name);
+                            } on MinItemLimitException catch (error) {
+                              setState(() => _deleting = false);
+                              showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      errorAlert(error, context: context));
+                            } on NotFoundException catch (error) {
+                              setState(() => _deleting = false);
+                              showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      errorAlert(error, context: context));
+                            }
+                            Navigator.pop(context);
+                          },
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ).then((_) => setState(() {}));
+          }, Colors.red)
         ]),
       ));
     });
@@ -172,6 +228,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       insetPadding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 24.0),
       contentPadding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
       scrollable: true,
+      title: Text(_initial == null ? 'New Schedule' : 'Edit Schedule'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -179,11 +236,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child:
-                      Text(_initial == null ? 'New Schedule' : 'Edit Schedule'),
-                ),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8.0),
                   child: Row(
@@ -400,7 +452,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           title: ElevatedButton(
             child: _addingSchedule
                 ? Container(
-                    width: 22.0,
                     height: 22.0,
                     child: CircularProgressIndicator(),
                   )
@@ -446,14 +497,30 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                               }).timeout(Timeouts.cnxn,
                                     onTimeout: () => throw ConnectionTimeout(
                                         'Failed to edit schedule'));
+                      } on DuplicateNameException catch (error) {
+                        setState(() => _addingSchedule = false);
+                        showDialog(
+                            context: context,
+                            builder: (_) =>
+                                errorAlert(error, context: context));
+                      } on MaxItemLimitException catch (error) {
+                        setState(() => _addingSchedule = false);
+                        showDialog(
+                            context: context,
+                            builder: (_) =>
+                                errorAlert(error, context: context));
+                      } on NotFoundException catch (error) {
+                        setState(() => _addingSchedule = false);
+                        showDialog(
+                            context: context,
+                            builder: (_) =>
+                                errorAlert(error, context: context));
                       } on ConnectionTimeout catch (error) {
                         setState(() => _addingSchedule = false);
                         showDialog(
                             context: context,
-                            builder: (_) => errorAlert(
-                                  error,
-                                  context: context,
-                                ));
+                            builder: (_) =>
+                                errorAlert(error, context: context));
                       }
                       Navigator.pop(context);
                     }
