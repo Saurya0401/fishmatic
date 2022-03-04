@@ -83,7 +83,7 @@ class ScheduleDAO {
 
   Future<void> deleteActive() async {
     String? _activeName = await activeName;
-    if (_activeName != null) await activeRef.child(_activeName).remove();
+    if (_activeName != null) await activeRef.remove();
   }
 
   Future<void> deleteSchedule(String scheduleName) async =>
