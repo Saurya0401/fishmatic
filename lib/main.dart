@@ -696,14 +696,11 @@ class _HomePageState extends State<HomePage> {
                               horizontal: 8.0, vertical: 24.0),
                           contentPadding:
                               EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
+                          title: Text('Feed Fish'),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: <Widget>[
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16.0),
-                                child: Text('Feed Fish'),
-                              ),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 8.0),
                                 child: Row(
