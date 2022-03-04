@@ -171,39 +171,39 @@ class ScheduleManager {
     }
   }
 
-  Future<void> deleteSchedule(String dataName) async {
-    final Map<String, Schedule> _dataMap = await dataAccess.scheduleMap;
-    if (_dataMap.keys.length == 0) throw MinItemLimitException(dataNode, 1);
-    if (!(await scheduleExists(dataName, _dataMap)))
-      throw NotFoundException(dataNode, dataName);
-    await dataAccess.deleteSchedule(dataName);
+  Future<void> deleteSchedule(String scheduleName) async {
+    final Map<String, Schedule> _scheduleMap = await dataAccess.scheduleMap;
+    if (_scheduleMap.keys.length == 0) throw MinItemLimitException(dataNode, 1);
+    if (!(await scheduleExists(scheduleName, _scheduleMap)))
+      throw NotFoundException(dataNode, scheduleName);
+    await dataAccess.deleteSchedule(scheduleName);
     await updateActive();
   }
 
-  Future<void> changeActive(String dataName) async {
+  Future<void> changeActive(String scheduleName) async {
     await dataAccess.deleteActive();
-    await dataAccess.addActive(dataName);
+    await dataAccess.addActive(scheduleName);
   }
 
   Future<void> updateActive() async {
-    final List<Schedule> _dataList = await schedules;
-    switch (_dataList.length) {
+    final List<Schedule> scheduleList = await schedules;
+    switch (scheduleList.length) {
       case 0:
         await dataAccess.deleteActive();
         return;
       case 1:
-        await changeActive(_dataList[0].name);
+        await changeActive(scheduleList[0].name);
         return;
       default:
         return;
     }
   }
 
-  Future<bool> scheduleExists(String dataName,
-      [Map<String, Schedule>? dataMap]) async {
-    final Map<String, Schedule> _dataMap =
-        dataMap ?? await dataAccess.scheduleMap;
-    return _dataMap.containsKey(dataName);
+  Future<bool> scheduleExists(String scheduleName,
+      [Map<String, Schedule>? scheduleMap]) async {
+    final Map<String, Schedule> _scheduleMap =
+        scheduleMap ?? await dataAccess.scheduleMap;
+    return _scheduleMap.containsKey(scheduleName);
   }
 }
 
