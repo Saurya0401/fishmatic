@@ -75,8 +75,8 @@ class ScheduleDAO {
   Future<String?> get activeName async =>
       (await activeRef.once()).snapshot.value as String?;
 
-  Future<void> addActive(String dataName) async =>
-      await activeRef.set(dataName);
+  Future<void> addActive(String scheduleName) async =>
+      await activeRef.set(scheduleName);
 
   Future<void> addSchedule(Schedule newSchedule) async =>
       await schedulesRef.child(newSchedule.name).set(newSchedule.toJson());
