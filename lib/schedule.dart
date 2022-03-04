@@ -25,8 +25,17 @@ class _SchedulesPageState extends State<SchedulesPage> {
 
   @override
   void initState() {
-    _schedules = _sManager.schedules.timeout(Timeouts.cnxn,
-        onTimeout: () => throw ConnectionTimeout('Error retrieving schedules'));
+    try {
+      _schedules = _sManager.schedules.timeout(Timeouts.cnxn,
+          onTimeout: () =>
+              throw ConnectionTimeout('Error retrieving schedules'));
+    } on ConnectionTimeout catch (error) {
+      print(error);
+      showDialog(
+          context: context,
+          builder: (_) => errorAlert(error, context: context));
+    }
+
     super.initState();
   }
 
@@ -69,37 +78,37 @@ class _SchedulesPageState extends State<SchedulesPage> {
                     ),
                     actions: <Widget>[
                       TextButton(
-                          child: Text('Cancel'),
-                          onPressed: () => Navigator.pop(context),
-                        ),
+                        child: Text('Cancel'),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                       TextButton(
-                          child: _deleting
-                              ? Container(
-                                  width: 22.0,
-                                  height: 22.0,
-                                  child: CircularProgressIndicator(),
-                                )
-                              : Text('Delete'),
-                          onPressed: () async {
-                            setState(() => _deleting = true);
-                            try {
-                              await _sManager.deleteSchedule(schedule.name);
-                            } on MinItemLimitException catch (error) {
-                              setState(() => _deleting = false);
-                              showDialog(
-                                  context: context,
-                                  builder: (_) =>
-                                      errorAlert(error, context: context));
-                            } on NotFoundException catch (error) {
-                              setState(() => _deleting = false);
-                              showDialog(
-                                  context: context,
-                                  builder: (_) =>
-                                      errorAlert(error, context: context));
-                            }
-                            Navigator.pop(context);
-                          },
-                        ),
+                        child: _deleting
+                            ? Container(
+                                width: 22.0,
+                                height: 22.0,
+                                child: CircularProgressIndicator(),
+                              )
+                            : Text('Delete'),
+                        onPressed: () async {
+                          setState(() => _deleting = true);
+                          try {
+                            await _sManager.deleteSchedule(schedule.name);
+                          } on MinItemLimitException catch (error) {
+                            setState(() => _deleting = false);
+                            showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    errorAlert(error, context: context));
+                          } on NotFoundException catch (error) {
+                            setState(() => _deleting = false);
+                            showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    errorAlert(error, context: context));
+                          }
+                          Navigator.pop(context);
+                        },
+                      ),
                     ],
                   ),
                 );
