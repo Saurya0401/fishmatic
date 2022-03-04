@@ -104,7 +104,7 @@ class Schedule {
         amount = json[Schedule.amtLabel].toDouble(),
         sTime = DateTime.parse(json[Schedule.stmLabel]),
         eTime = DateTime.parse(json[Schedule.etmLabel]) {
-    print('parsing json');
+    print('parsing Schedule from json');
   }
 
   Map<String, dynamic> toJson() => {
