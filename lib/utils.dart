@@ -21,7 +21,6 @@ AlertDialog errorAlert(
       title: Text(
         error is FishmaticBaseException ? error.title : title ?? 'Error',
         style: TextStyle(
-          fontSize: 20,
           fontWeight: FontWeight.bold,
           color: Colors.red,
         ),
@@ -33,7 +32,7 @@ AlertDialog errorAlert(
             error is FishmaticBaseException
                 ? error.errorText
                 : error.toString(),
-            style: TextStyle(fontSize: 18),
+            style: TextStyle(fontSize: 16),
           ),
         ],
       ),
