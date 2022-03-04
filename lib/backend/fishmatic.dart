@@ -4,7 +4,6 @@ import 'package:fishmatic/backend/data_models.dart';
 import 'package:fishmatic/backend/data_access.dart';
 import 'package:fishmatic/backend/exceptions.dart';
 
-
 abstract class _BaseServo {
   final GenericDAO<int> _dataAccess;
 
@@ -58,8 +57,7 @@ class Fishmatic {
     if (enable) await setLight(lightStatus);
   }
 
-  Future<LightFlags> setLight(ValueStatus lightLevel,
-      [bool? flag]) async {
+  Future<LightFlags> setLight(ValueStatus lightLevel, [bool? flag]) async {
     bool currLightOnFlag = await lightOn.flag;
     bool autoLightOnFlag = await autoLightOn.flag;
     if (autoLightOnFlag)
@@ -180,10 +178,8 @@ class ScheduleManager {
     await updateActive();
   }
 
-  Future<void> changeActive(String scheduleName) async {
-    await dataAccess.deleteActive();
-    await dataAccess.addActive(scheduleName);
-  }
+  Future<void> changeActive(String scheduleName) async =>
+      await dataAccess.addActive(scheduleName);
 
   Future<void> updateActive() async {
     final List<Schedule> scheduleList = await schedules;
@@ -206,7 +202,6 @@ class ScheduleManager {
     return _scheduleMap.containsKey(scheduleName);
   }
 }
-
 
 class StatusMonitor {
   final StatusDAO _dataAccess;
