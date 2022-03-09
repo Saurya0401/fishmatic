@@ -3,6 +3,8 @@ import 'package:firebase_database/firebase_database.dart';
 
 import 'package:fishmatic/backend/data_models.dart';
 
+// TODO: Replace all <DatabaseReference>.once() calls with get()
+
 class GenericDAO<T> {
   late final DatabaseReference baseRef;
 
@@ -67,8 +69,8 @@ class ScheduleDAO {
     if (event.snapshot.value == null) return {};
     final Map scheduleInfo = event.snapshot.value as Map<Object?, Object?>;
     return (scheduleInfo).map((scheduleName, scheduleJson) => MapEntry(
-        scheduleName as String,
-        Schedule.fromJson(scheduleName,
+        scheduleName.toString(),
+        Schedule.fromJson(scheduleName.toString(),
             Map<String, dynamic>.from(scheduleJson as Map<Object?, Object?>))));
   }
 
@@ -79,6 +81,7 @@ class ScheduleDAO {
       await activeRef.set(scheduleName);
 
   Future<void> addSchedule(Schedule newSchedule) async =>
+    // TODO: Use push() to create random IDs for auto sorting
       await schedulesRef.child(newSchedule.name).set(newSchedule.toJson());
 
   Future<void> deleteActive() async {
