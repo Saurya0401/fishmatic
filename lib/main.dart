@@ -150,7 +150,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _refresh() {
-    setState((() => _initFutures()));
+    setState(() => _initFutures());
   }
 
   void _updateTempNotif() {
@@ -594,7 +594,14 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ).then((_) {
                                 // TODO: refresh only if schedule has been edited
-                                _refresh();
+                                try {
+                                  _refresh();
+                                } on ConnectionTimeout catch (error) {
+                                  showDialog(
+                                      context: context,
+                                      builder: (_) =>
+                                          errorAlert(error, context: context));
+                                }
                               });
                             }, Theme.of(context).colorScheme.primary),
                             ButtonInfo('Change', () {
@@ -604,7 +611,14 @@ class _HomePageState extends State<HomePage> {
                                     ScheduleListDialog(_scheduleManager),
                               ).then((_) {
                                 // TODO: refresh only if schedule has been changed
-                                _refresh();
+                                try {
+                                  _refresh();
+                                } on ConnectionTimeout catch (error) {
+                                  showDialog(
+                                      context: context,
+                                      builder: (_) =>
+                                          errorAlert(error, context: context));
+                                }
                               });
                             }, Theme.of(context).colorScheme.primary),
                           ]);
@@ -635,7 +649,16 @@ class _HomePageState extends State<HomePage> {
                                       visualDensity: VisualDensity(
                                           vertical:
                                               VisualDensity.minimumDensity),
-                                      onPressed: () => _refresh(),
+                                      onPressed: () {
+                                        try {
+                                          _refresh();
+                                        } on ConnectionTimeout catch (error) {
+                                          showDialog(
+                                              context: context,
+                                              builder: (_) => errorAlert(error,
+                                                  context: context));
+                                        }
+                                      },
                                       icon: Icon(
                                         Icons.refresh,
                                         color: Theme.of(context)
@@ -676,7 +699,13 @@ class _HomePageState extends State<HomePage> {
                     builder: (context) => SchedulesPage(_scheduleManager),
                   ),
                 ).then((_) {
-                  _refresh();
+                  try {
+                    _refresh();
+                  } on ConnectionTimeout catch (error) {
+                    showDialog(
+                        context: context,
+                        builder: (_) => errorAlert(error, context: context));
+                  }
                 });
                 break;
               case 1:
