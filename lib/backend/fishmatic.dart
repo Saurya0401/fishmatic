@@ -4,35 +4,20 @@ import 'package:fishmatic/backend/data_models.dart';
 import 'package:fishmatic/backend/data_access.dart';
 import 'package:fishmatic/backend/exceptions.dart';
 
-abstract class _BaseServo {
-  final GenericDAO<int> _dataAccess;
-
-  _BaseServo(this._dataAccess);
-
-  Future<void> initialise() async => _dataAccess.init(0);
-
-  Future<void> executeCycle(
-      int initAngle, int endAngle, int delaySeconds) async {
-    await _dataAccess.setValue(initAngle);
-    await Future.delayed(Duration(seconds: delaySeconds));
-    await _dataAccess.setValue(endAngle);
-  }
-}
-
 class Fishmatic {
   final String userID;
   late final Flag lightOn;
   late final Flag autoLightOn;
-  late final FeederServo feederServo;
-  late final FilterServo filterServo;
+  late final Servo feederServo;
+  late final Servo filterServo;
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
 
   Fishmatic(this.userID) {
     lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOnFlag));
     autoLightOn = Flag(GenericDAO<bool>(userID, DataNodes.autoLightOn));
-    feederServo = FeederServo(GenericDAO<int>(userID, DataNodes.feederServo));
-    filterServo = FilterServo(GenericDAO<int>(userID, DataNodes.filterServo));
+    feederServo = Servo(GenericDAO<int>(userID, DataNodes.feederServo));
+    filterServo = Servo(GenericDAO<int>(userID, DataNodes.filterServo));
     statusMonitor = StatusMonitor(StatusDAO(userID));
     scheduleManager =
         ScheduleManager(ScheduleDAO(userID), Limits.scheduleLimit);
@@ -48,7 +33,7 @@ class Fishmatic {
 
   Future<void> feedFish(double amount, double currentLevel) async {
     if (currentLevel <= Limits.criticalLowFood) throw CriticalFoodException();
-    await feederServo.executeFeedCycle();
+    await feederServo.executeCycle(180, 0, 2);
     await statusMonitor.updateFoodLevel(currentLevel - amount);
   }
 
@@ -68,22 +53,6 @@ class Fishmatic {
   }
 }
 
-class FeederServo extends _BaseServo {
-  FeederServo(GenericDAO<int> dataAccess) : super(dataAccess);
-
-  Future<void> executeFeedCycle() async {
-    await super.executeCycle(180, 0, 2);
-  }
-}
-
-class FilterServo extends _BaseServo {
-  FilterServo(GenericDAO<int> dataAccess) : super(dataAccess);
-
-  Future<void> executeFilterCycle() async {
-    await super.executeCycle(180, 0, 4);
-  }
-}
-
 class Flag {
   GenericDAO<bool> _dataAccess;
   Flag(this._dataAccess);
@@ -94,6 +63,21 @@ class Flag {
       await this._dataAccess.setValue(state);
 
   Future<bool> get flag async => await _dataAccess.getValue();
+}
+
+class Servo {
+  final GenericDAO<int> _dataAccess;
+
+  Servo(this._dataAccess);
+
+  Future<void> initialise() async => _dataAccess.init(0);
+
+  Future<void> executeCycle(
+      int startAngle, int endAngle, int delaySeconds) async {
+    await _dataAccess.setValue(startAngle);
+    await Future.delayed(Duration(seconds: delaySeconds));
+    await _dataAccess.setValue(endAngle);
+  }
 }
 
 class ScheduleManager {

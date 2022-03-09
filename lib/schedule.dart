@@ -470,7 +470,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 : () async {
                     setState(() {
                       _validName = _validInterval = _validFood = true;
-                      if (_nameCtrl.text.isEmpty) _validName = false;
+                      if (_nameCtrl.text.isEmpty ||
+                          (int.tryParse(_nameCtrl.text) == null &&
+                              double.tryParse(_nameCtrl.text) != null))
+                        _validName = false;
                       if (_intervalCtrl.text.isEmpty ||
                           double.tryParse(_intervalCtrl.text) == null)
                         _validInterval = false;
