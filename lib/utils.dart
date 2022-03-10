@@ -1,6 +1,7 @@
 import 'package:fishmatic/backend/exceptions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 
 class ButtonInfo {
   final String text;
@@ -13,6 +14,7 @@ class ButtonInfo {
 AlertDialog errorAlert(
   Object error, {
   String? title,
+  String? message,
   BuildContext? context,
 }) =>
     AlertDialog(
@@ -31,7 +33,7 @@ AlertDialog errorAlert(
           Text(
             error is FishmaticBaseException
                 ? error.errorText
-                : error.toString(),
+                : message ?? error.toString(),
             style: TextStyle(fontSize: 16),
           ),
         ],
@@ -59,17 +61,19 @@ Column infoList(String name, Map<Icon, String> infoMap,
   ];
   List<Widget> _buttons = [];
   infoMap.entries.forEach((entry) {
-    _info.add(ListTile(
-      leading: entry.key,
-      title: Text(
-        entry.value,
-        style: TextStyle(fontSize: 16),
+    _info.add(
+      ListTile(
+        leading: entry.key,
+        title: Text(
+          entry.value,
+          style: TextStyle(fontSize: 16),
+        ),
+        dense: true,
+        visualDensity: VisualDensity(
+            horizontal: VisualDensity.minimumDensity,
+            vertical: VisualDensity.minimumDensity),
       ),
-      dense: true,
-      visualDensity: VisualDensity(
-          horizontal: VisualDensity.minimumDensity,
-          vertical: VisualDensity.minimumDensity),
-    ));
+    );
   });
   buttonInfos?.forEach((button) {
     _buttons.add(Padding(

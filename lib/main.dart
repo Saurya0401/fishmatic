@@ -11,20 +11,7 @@ import 'package:fishmatic/schedule.dart';
 import 'package:fishmatic/utils.dart';
 
 // TODO: Exception handling (network errors, sign in errors, null data errors)
-
-Future<Fishmatic> initFishmatic() async {
-  // TODO: Check if firebase is initialised before initialising
-  await Firebase.initializeApp();
-  final FirebaseAuth _fbAuth = FirebaseAuth.instance;
-  final User user = (await _fbAuth.signInAnonymously()).user!;
-  final Fishmatic _fm = Fishmatic(user.uid);
-  await _fm.initialise().timeout(
-        Timeouts.cnxn,
-        onTimeout: () =>
-            throw ConnectionTimeout('Server initialisation failed'),
-      );
-  return _fm;
-}
+// TODO: Fix showing dialogs from FutureBuilder
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +27,43 @@ class FishmaticApp extends StatefulWidget {
 
 class _FishmaticAppState extends State<FishmaticApp> {
   late Future<Fishmatic> _futureFM;
+
+  Future<Fishmatic> initFishmatic() async {
+    // TODO: Check if firebase is initialised before initialising
+    Exception? initError;
+    try {
+      await Firebase.initializeApp();
+      final FirebaseAuth _fbAuth = FirebaseAuth.instance;
+      final User user = (await _fbAuth.signInAnonymously()).user!;
+      final Fishmatic _fm = Fishmatic(user.uid);
+      await _fm.initialise().timeout(
+            Timeouts.cnxn,
+            onTimeout: () =>
+                throw ConnectionTimeout('Server initialisation failed'),
+          );
+      return _fm;
+    } on ConnectionTimeout catch (error) {
+      initError = error;
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(error),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      initError = error;
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(error,
+              title: 'Server Error', message: 'Server initialisation failed.'),
+        ),
+      );
+    }
+    throw initError;
+  }
 
   @override
   void initState() {
@@ -59,7 +83,11 @@ class _FishmaticAppState extends State<FishmaticApp> {
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               print(snapshot.error.toString());
-              return errorAlert(snapshot.error!);
+              return Center(
+                child: Card(
+                  child: Text(snapshot.error.toString()),
+                ),
+              );
             } else if (snapshot.hasData) {
               final Fishmatic fishmatic = snapshot.data!;
               print('Signed in Anonymously as user ${fishmatic.userID}');
@@ -144,9 +172,7 @@ class _HomePageState extends State<HomePage> {
           maxCritical: Limits.criticalHighLight.toDouble(),
         ),
         (StreamData a, StreamData b, StreamData c) => [a, b, c]);
-    _activeSchedule = _scheduleManager.activeSchedule.timeout(Timeouts.cnxn,
-        onTimeout: () =>
-            throw ConnectionTimeout('Failed to retrieve active schedule'));
+    _activeSchedule = _getActiveSchedule();
   }
 
   void _refresh() {
@@ -181,6 +207,38 @@ class _HomePageState extends State<HomePage> {
         _foodNotif = null;
         break;
     }
+  }
+
+  Future<Schedule> _getActiveSchedule() async {
+    try {
+      return await _scheduleManager.activeSchedule.timeout(Timeouts.cnxn,
+          onTimeout: () =>
+              throw ConnectionTimeout('Failed to retrieve active schedule'));
+    } on ConnectionTimeout catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            context: context,
+          ),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            title: "Server Error",
+            context: context,
+          ),
+        ),
+      );
+    }
+    return Schedule.nullSchedule();
   }
 
   ListTile _addNotif(String title, String parameter) {

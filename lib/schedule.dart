@@ -1,6 +1,7 @@
-import 'package:fishmatic/backend/exceptions.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 
+import 'package:fishmatic/backend/exceptions.dart';
 import 'package:fishmatic/backend/fishmatic.dart';
 import 'package:fishmatic/backend/data_models.dart' show Schedule, Timeouts;
 import 'package:fishmatic/utils.dart';
@@ -26,9 +27,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
   @override
   void initState() {
     try {
-      _schedules = _sManager.schedules.timeout(Timeouts.cnxn,
-          onTimeout: () =>
-              throw ConnectionTimeout('Error retrieving schedules'));
+      _schedules = _getSchedules();
     } on ConnectionTimeout catch (error) {
       print(error);
       showDialog(
@@ -39,85 +38,136 @@ class _SchedulesPageState extends State<SchedulesPage> {
     super.initState();
   }
 
+  Future<List<Schedule>> _getSchedules() async {
+    try {
+      return await _sManager.schedules.timeout(Timeouts.cnxn,
+          onTimeout: () =>
+              throw ConnectionTimeout('Error retrieving schedules'));
+    } on ConnectionTimeout catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            context: context,
+          ),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            title: 'Server Error',
+            message: 'Could not retrieve schedules. Please check your connection.',
+            context: context,
+          ),
+        ),
+      );
+    }
+    return [Schedule.nullSchedule()];
+  }
+
   List<Card> _scheduleCards(List<Schedule> schedules) {
     List<Card> scheduleCards = [];
-    schedules.forEach((schedule) {
-      scheduleCards.add(Card(
-        child: infoList(schedule.name, {
-          Icon(Icons.timer): schedule.intervalStr,
-          Icon(Icons.fastfood): schedule.amountStr,
-          Icon(Icons.timelapse): schedule.durationStr,
-        }, <ButtonInfo>[
-          ButtonInfo('Edit', () {
-            showDialog(
+    for (Schedule schedule in schedules) {
+      if (schedule.isNull) {
+        scheduleCards = [
+          Card(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Error retrieving schedules.',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ),
+          ),
+        ];
+        break;
+      }
+      scheduleCards.add(
+        Card(
+          child: infoList(schedule.name, {
+            Icon(Icons.timer): schedule.intervalStr,
+            Icon(Icons.fastfood): schedule.amountStr,
+            Icon(Icons.timelapse): schedule.durationStr,
+          }, <ButtonInfo>[
+            ButtonInfo('Edit', () {
+              showDialog(
+                  context: context,
+                  builder: (_) => ScheduleDialog(
+                        _sManager,
+                        initial: schedule,
+                      )).then((_) {
+                setState(() {});
+              });
+            }, Theme.of(context).colorScheme.primary),
+            ButtonInfo('Delete', () {
+              showDialog(
                 context: context,
-                builder: (_) => ScheduleDialog(
-                      _sManager,
-                      initial: schedule,
-                    )).then((_) {
-              setState(() {});
-            });
-          }, Theme.of(context).colorScheme.primary),
-          ButtonInfo('Delete', () {
-            showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                bool _deleting = false;
-                return StatefulBuilder(
-                  builder: (BuildContext context, StateSetter setState) =>
-                      AlertDialog(
-                    insetPadding: const EdgeInsets.symmetric(
-                        horizontal: 8.0, vertical: 24.0),
-                    contentPadding:
-                        const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
-                    title: Text('Delete Schedule'),
-                    content: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Text(
-                          'Are you sure you want to delete this schedule?'),
+                builder: (BuildContext context) {
+                  bool _deleting = false;
+                  return StatefulBuilder(
+                    builder: (BuildContext context, StateSetter setState) =>
+                        AlertDialog(
+                      insetPadding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 24.0),
+                      contentPadding:
+                          const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
+                      title: Text('Delete Schedule'),
+                      content: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                            'Are you sure you want to delete this schedule?'),
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          child: Text('Cancel'),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        TextButton(
+                          child: _deleting
+                              ? Container(
+                                  width: 22.0,
+                                  height: 22.0,
+                                  child: CircularProgressIndicator(),
+                                )
+                              : Text('Delete'),
+                          onPressed: () async {
+                            setState(() => _deleting = true);
+                            try {
+                              await _sManager.deleteSchedule(schedule.name);
+                            } on MinItemLimitException catch (error) {
+                              setState(() => _deleting = false);
+                              showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      errorAlert(error, context: context));
+                            } on NotFoundException catch (error) {
+                              setState(() => _deleting = false);
+                              showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      errorAlert(error, context: context));
+                            }
+                            Navigator.pop(context);
+                          },
+                        ),
+                      ],
                     ),
-                    actions: <Widget>[
-                      TextButton(
-                        child: Text('Cancel'),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      TextButton(
-                        child: _deleting
-                            ? Container(
-                                width: 22.0,
-                                height: 22.0,
-                                child: CircularProgressIndicator(),
-                              )
-                            : Text('Delete'),
-                        onPressed: () async {
-                          setState(() => _deleting = true);
-                          try {
-                            await _sManager.deleteSchedule(schedule.name);
-                          } on MinItemLimitException catch (error) {
-                            setState(() => _deleting = false);
-                            showDialog(
-                                context: context,
-                                builder: (_) =>
-                                    errorAlert(error, context: context));
-                          } on NotFoundException catch (error) {
-                            setState(() => _deleting = false);
-                            showDialog(
-                                context: context,
-                                builder: (_) =>
-                                    errorAlert(error, context: context));
-                          }
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ).then((_) => setState(() {}));
-          }, Colors.red)
-        ]),
-      ));
-    });
+                  );
+                },
+              ).then((_) => setState(() {}));
+            }, Colors.red)
+          ]),
+        ),
+      );
+    }
     return scheduleCards;
   }
 
@@ -138,19 +188,14 @@ class _SchedulesPageState extends State<SchedulesPage> {
           builder: (BuildContext context, BoxConstraints viewportConstraints) =>
               SingleChildScrollView(
             child: FutureBuilder(
-              future: _refresh
-                  ? _sManager.schedules.timeout(Timeouts.cnxn,
-                      onTimeout: () => throw ConnectionTimeout(
-                          'Failed to retrieve schedules'))
-                  : _schedules,
+              future: _refresh ? _getSchedules() : _schedules,
               builder: (BuildContext context,
                   AsyncSnapshot<List<Schedule>> snapshot) {
                 if (snapshot.hasError) {
                   print(snapshot.error);
-                  return errorAlert(
-                    snapshot.error!,
-                    title: 'Error Retrieving Schedules',
-                    context: context,
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _scheduleCards(snapshot.data!),
                   );
                 } else if (snapshot.hasData) {
                   return Column(
@@ -558,51 +603,85 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
 
   _ScheduleListDialogState(this._sm);
 
-  Future<List<SimpleDialogOption>> _scheduleList() async {
-    List<SimpleDialogOption> scheduleOptions = [];
-    (await _sm.schedules).forEach((schedule) {
-      scheduleOptions.add(SimpleDialogOption(
-        child: _updating
-            ? SizedBox(
-                height: 24.0,
-                child: CircularProgressIndicator(),
-              )
-            : Text(schedule.name),
-        onPressed: _updating
-            ? null
-            : () async {
-                setState(() => _updating = true);
-                try {
-                  await _sm.changeActive(schedule.name);
-                } on ConnectionTimeout catch (error) {
-                  showDialog(
-                      context: context,
-                      builder: (_) => errorAlert(
-                            error,
-                            context: context,
-                          ));
-                }
-                Navigator.pop(context);
-              },
-      ));
-    });
-    return scheduleOptions;
+  Future<List<SimpleDialogOption>> _scheduleListDialog() async {
+    try {
+      List<SimpleDialogOption> scheduleOptions = [];
+      (await _sm.schedules.timeout(Timeouts.cnxn,
+              onTimeout: () =>
+                  throw ConnectionTimeout('Failed to retrieve schedules')))
+          .forEach((schedule) {
+        scheduleOptions.add(
+          SimpleDialogOption(
+            child: Text(
+              schedule.name,
+              style: _updating
+                  ? TextStyle(color: Theme.of(context).disabledColor)
+                  : Theme.of(context).primaryTextTheme.bodyMedium,
+            ),
+            onPressed: _updating
+                ? null
+                : () async {
+                    setState(() => _updating = true);
+                    try {
+                      await _sm.changeActive(schedule.name);
+                    } on ConnectionTimeout catch (error) {
+                      showDialog(
+                          context: context,
+                          builder: (_) => errorAlert(
+                                error,
+                                context: context,
+                              ));
+                    }
+                    Navigator.pop(context);
+                  },
+          ),
+        );
+      });
+      return scheduleOptions;
+    } on ConnectionTimeout catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            context: context,
+          ),
+        ),
+      );
+    } on FirebaseException catch (error) {
+      Future.delayed(
+        Duration.zero,
+        () => showDialog(
+          context: context,
+          builder: (_) => errorAlert(
+            error,
+            title: 'Server Error',
+            message: 'Could not retrieve schedules. Please check your connection.',
+            context: context,
+          ),
+        ),
+      );
+    }
+    return [
+      SimpleDialogOption(
+        child: Text('Error retrieving schedules.'),
+        onPressed: () => Navigator.pop(context),
+      )
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-        future: _scheduleList().timeout(Timeouts.cnxn,
-            onTimeout: () =>
-                throw ConnectionTimeout('Failed to retrieve schedules')),
+        future: _scheduleListDialog(),
         builder: (BuildContext context,
             AsyncSnapshot<List<SimpleDialogOption>> snapshot) {
           if (snapshot.hasError) {
             print(snapshot.error);
-            return errorAlert(
-              snapshot.error!,
-              title: 'Error Retrieving Schedules',
-              context: context,
+             return SimpleDialog(
+              title: const Text('Select schedule'),
+              children: snapshot.data!,
             );
           } else if (snapshot.hasData) {
             return SimpleDialog(
