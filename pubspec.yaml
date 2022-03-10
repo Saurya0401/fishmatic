@@ -30,6 +30,7 @@ dependencies:
   syncfusion_flutter_gauges: ^19.4.48
   rxdart: ^0.27.3
   async: ^2.8.2
+  flutter_bluetooth_serial: ^0.4.0
 
 dev_dependencies:
   flutter_test:
