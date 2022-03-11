@@ -9,8 +9,9 @@ enum ValueStatus {
 }
 
 class DataNodes {
-  static const String lightOnFlag = 'light_on';
+  static const String lightOn = 'light_on';
   static const String autoLightOn = 'auto_light';
+  static const String setupMode = "setup_mode";
   static const String feederServo = 'feeder_servo';
   static const String filterServo = 'filter_servo';
   static const String foodLevel = 'food_level';
