@@ -8,14 +8,16 @@ class Fishmatic {
   final String userID;
   late final Flag lightOn;
   late final Flag autoLightOn;
+  late final Flag setupMode;
   late final Servo feederServo;
   late final Servo filterServo;
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
 
   Fishmatic(this.userID) {
-    lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOnFlag));
+    lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOn));
     autoLightOn = Flag(GenericDAO<bool>(userID, DataNodes.autoLightOn));
+    setupMode = Flag(GenericDAO<bool>(userID, DataNodes.setupMode));
     feederServo = Servo(GenericDAO<int>(userID, DataNodes.feederServo));
     filterServo = Servo(GenericDAO<int>(userID, DataNodes.filterServo));
     statusMonitor = StatusMonitor(StatusDAO(userID));
@@ -26,6 +28,7 @@ class Fishmatic {
   Future<void> initialise() async {
     await lightOn.initialise();
     await autoLightOn.initialise();
+    await setupMode.initialise();
     await feederServo.initialise();
     await filterServo.initialise();
     await statusMonitor.initialise();
