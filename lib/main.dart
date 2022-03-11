@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:rxdart/rxdart.dart';
+import 'package:rxdart/rxdart.dart' show CombineLatestStream;
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 
 import 'package:fishmatic/backend/data_models.dart';
