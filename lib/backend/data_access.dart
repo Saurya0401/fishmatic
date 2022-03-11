@@ -3,8 +3,6 @@ import 'package:firebase_database/firebase_database.dart';
 
 import 'package:fishmatic/backend/data_models.dart';
 
-// TODO: Replace all <DatabaseReference>.once() calls with get()
-
 class GenericDAO<T> {
   late final DatabaseReference baseRef;
 
@@ -19,13 +17,13 @@ class GenericDAO<T> {
   Future<void> init(T initValue, [String? childNode]) async {
     DatabaseReference ref =
         childNode == null ? baseRef : baseRef.child(childNode);
-    if ((await ref.once()).snapshot.value == null) await ref.set(initValue);
+    if ((await ref.get()).value == null) await ref.set(initValue);
   }
 
   Future<T> getValue([String? childNode]) async {
     DatabaseReference ref =
         childNode == null ? baseRef : baseRef.child(childNode);
-    return (await ref.once()).snapshot.value! as T;
+    return (await ref.get()).value! as T;
   }
 
   Stream<DatabaseEvent> getStream([String? childNode]) {
@@ -65,9 +63,9 @@ class ScheduleDAO {
   }
 
   Future<Map<String, Schedule>> get scheduleMap async {
-    final DatabaseEvent event = await schedulesRef.once();
-    if (event.snapshot.value == null) return {};
-    final Map scheduleInfo = event.snapshot.value as Map<Object?, Object?>;
+    final DataSnapshot snapshot = await schedulesRef.get();
+    if (snapshot.value == null) return {};
+    final Map scheduleInfo = snapshot.value as Map<Object?, Object?>;
     return (scheduleInfo).map((scheduleName, scheduleJson) => MapEntry(
         scheduleName.toString(),
         Schedule.fromJson(scheduleName.toString(),
@@ -75,13 +73,13 @@ class ScheduleDAO {
   }
 
   Future<String?> get activeName async =>
-      (await activeRef.once()).snapshot.value as String?;
+      (await activeRef.get()).value as String?;
 
   Future<void> addActive(String scheduleName) async =>
       await activeRef.set(scheduleName);
 
   Future<void> addSchedule(Schedule newSchedule) async =>
-    // TODO: Use push() to create random IDs for auto sorting
+      // TODO: Use push() to create random IDs for auto sorting
       await schedulesRef.child(newSchedule.name).set(newSchedule.toJson());
 
   Future<void> deleteActive() async {
