@@ -21,7 +21,7 @@ class DataNodes {
 
 class Limits {
   static const int scheduleLimit = 5;
-  static const int criticalLowLight = 100;
+  static const int criticalLowLight = 500;
   static const int criticalHighLight = 3000;
   static const double lowFood = 20.0;
   static const double criticalLowFood = 10.0;
