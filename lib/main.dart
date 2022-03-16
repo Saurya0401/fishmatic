@@ -4,11 +4,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:rxdart/rxdart.dart' show CombineLatestStream;
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 
-import 'package:fishmatic/backend/data_models.dart';
-import 'package:fishmatic/backend/exceptions.dart';
-import 'package:fishmatic/backend/fishmatic.dart';
-import 'package:fishmatic/schedule.dart';
-import 'package:fishmatic/utils.dart';
+import './backend/data_models.dart';
+import './backend/exceptions.dart';
+import './backend/fishmatic.dart';
+import './setup.dart';
+import './schedule.dart';
+import './utils.dart';
 
 // TODO: Exception handling (network errors, sign in errors, null data errors)
 // TODO: Fix showing dialogs from FutureBuilder
@@ -26,9 +27,9 @@ class FishmaticApp extends StatefulWidget {
 }
 
 class _FishmaticAppState extends State<FishmaticApp> {
-  late Future<Fishmatic> _futureFM;
+  late Future<Pair<Fishmatic, bool>> _futureFM;
 
-  Future<Fishmatic> initFishmatic() async {
+  Future<Pair<Fishmatic, bool>> initFishmatic() async {
     // TODO: Check if firebase is initialised before initialising
     Exception? initError;
     try {
@@ -41,7 +42,7 @@ class _FishmaticAppState extends State<FishmaticApp> {
             onTimeout: () =>
                 throw ConnectionTimeout('Server initialisation failed'),
           );
-      return _fm;
+      return Pair(_fm, await _fm.onSetupMode);
     } on ConnectionTimeout catch (error) {
       initError = error;
       Future.delayed(
@@ -78,7 +79,7 @@ class _FishmaticAppState extends State<FishmaticApp> {
       theme: ThemeData.dark(),
       darkTheme: ThemeData.dark(),
       debugShowCheckedModeBanner: true,
-      home: FutureBuilder<Fishmatic>(
+      home: FutureBuilder<Pair<Fishmatic, bool>>(
           future: _futureFM,
           builder: (context, snapshot) {
             if (snapshot.hasError) {
@@ -89,12 +90,15 @@ class _FishmaticAppState extends State<FishmaticApp> {
                 ),
               );
             } else if (snapshot.hasData) {
-              final Fishmatic fishmatic = snapshot.data!;
+              final Fishmatic fishmatic = snapshot.data!.first;
+              final bool onSetupMode = snapshot.data!.last;
               print('Signed in Anonymously as user ${fishmatic.userID}');
-              return HomePage(
-                title: 'Fishmatic',
-                fishmatic: fishmatic,
-              );
+              return onSetupMode
+                  ? SetupPage()
+                  : HomePage(
+                      title: 'Fishmatic',
+                      fishmatic: fishmatic,
+                    );
             } else {
               return Center(
                 child: CircularProgressIndicator(),
@@ -414,7 +418,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Don't refresh if user dismisses dialog by tapping outside
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -554,7 +557,7 @@ class _HomePageState extends State<HomePage> {
                                         fit: FlexFit.tight,
                                         child: waiting
                                             ? SizedBox(
-                                                height: 20,
+                                                height: 4,
                                                 child:
                                                     LinearProgressIndicator(),
                                               )
@@ -644,38 +647,41 @@ class _HomePageState extends State<HomePage> {
                             Icon(Icons.timelapse): _active.durationStr,
                           }, <ButtonInfo>[
                             ButtonInfo('Edit', () {
-                              showDialog(
+                              showDialog<bool>(
                                 context: context,
                                 builder: (_) => ScheduleDialog(
                                   _scheduleManager,
                                   initial: _active,
                                 ),
-                              ).then((_) {
-                                // TODO: refresh only if schedule has been edited
-                                try {
-                                  _refresh();
-                                } on ConnectionTimeout catch (error) {
-                                  showDialog(
-                                      context: context,
-                                      builder: (_) =>
-                                          errorAlert(error, context: context));
+                              ).then((scheduleEdited) {
+                                if (scheduleEdited ?? false) {
+                                  try {
+                                    _refresh();
+                                  } on ConnectionTimeout catch (error) {
+                                    showDialog(
+                                        context: context,
+                                        builder: (_) => errorAlert(error,
+                                            context: context));
+                                  }
                                 }
                               });
                             }, Theme.of(context).colorScheme.primary),
                             ButtonInfo('Change', () {
-                              showDialog(
+                              showDialog<bool>(
                                 context: context,
                                 builder: (_) =>
                                     ScheduleListDialog(_scheduleManager),
-                              ).then((_) {
-                                // TODO: refresh only if schedule has been changed
-                                try {
-                                  _refresh();
-                                } on ConnectionTimeout catch (error) {
-                                  showDialog(
-                                      context: context,
-                                      builder: (_) =>
-                                          errorAlert(error, context: context));
+                              ).then((scheduleChanged) {
+                                print(scheduleChanged);
+                                if (scheduleChanged ?? false) {
+                                  try {
+                                    _refresh();
+                                  } on ConnectionTimeout catch (error) {
+                                    showDialog(
+                                        context: context,
+                                        builder: (_) => errorAlert(error,
+                                            context: context));
+                                  }
                                 }
                               });
                             }, Theme.of(context).colorScheme.primary),
@@ -754,7 +760,7 @@ class _HomePageState extends State<HomePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => SchedulesPage(_scheduleManager),
+                    builder: (_) => SchedulesPage(_scheduleManager),
                   ),
                 ).then((_) {
                   try {
