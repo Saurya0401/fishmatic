@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 
-import 'package:fishmatic/backend/data_models.dart';
+import './data_models.dart';
 
 class GenericDAO<T> {
   late final DatabaseReference baseRef;

@@ -12,7 +12,21 @@ class FishmaticBaseException implements Exception {
       _message + (_details == null ? '' : ':\n' + _details!) + '.';
 
   @override
-  String toString() => _message + (_details == null ? '' : ':\n' + _details!) + '.';
+  String toString() => errorText;
+}
+
+class BluetoothConnectionError extends FishmaticBaseException {
+  BluetoothConnectionError(String message)
+      : super('Bluetooth Connection Error', message);
+}
+
+class BluetoothDisabledException extends FishmaticBaseException {
+  BluetoothDisabledException()
+      : super('Bluetooth Disabled', 'Please turn on bluetooth');
+}
+
+class SetupException extends FishmaticBaseException {
+  SetupException(String message) : super('Setup Error', message);
 }
 
 class DuplicateNameException extends FishmaticBaseException {
