@@ -62,7 +62,8 @@ class _SchedulesPageState extends State<SchedulesPage> {
           builder: (_) => errorAlert(
             error,
             title: 'Server Error',
-            message: 'Could not retrieve schedules. Please check your connection.',
+            message:
+                'Could not retrieve schedules. Please check your connection.',
             context: context,
           ),
         ),
@@ -230,15 +231,13 @@ class _SchedulesPageState extends State<SchedulesPage> {
 }
 
 class ScheduleDialog extends StatefulWidget {
-  ScheduleDialog(this._sm, {Key? key, Schedule? initial}) : super(key: key) {
-    _initial = initial;
-  }
+  const ScheduleDialog(this.sm, {Key? key, this.initial}) : super(key: key);
 
-  final ScheduleManager _sm;
-  late final Schedule? _initial;
+  final ScheduleManager sm;
+  final Schedule? initial;
 
   @override
-  _ScheduleDialogState createState() => _ScheduleDialogState(_sm, _initial);
+  _ScheduleDialogState createState() => _ScheduleDialogState(sm, initial);
 }
 
 class _ScheduleDialogState extends State<ScheduleDialog> {
@@ -250,6 +249,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   late String _endHour;
   late String _endMinute;
   bool _addingSchedule = false;
+  bool _scheduleEdited = false;
   bool _validName = true, _validInterval = true, _validFood = true;
 
   _ScheduleDialogState(this._sm, this._initial);
@@ -553,6 +553,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                               }).timeout(Timeouts.cnxn,
                                     onTimeout: () => throw ConnectionTimeout(
                                         'Failed to edit schedule'));
+                        _scheduleEdited = true;
                       } on DuplicateNameException catch (error) {
                         setState(() => _addingSchedule = false);
                         showDialog(
@@ -578,7 +579,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                             builder: (_) =>
                                 errorAlert(error, context: context));
                       }
-                      Navigator.pop(context);
+                      Navigator.pop(context, _scheduleEdited);
                     }
                   },
           ),
@@ -600,6 +601,7 @@ class ScheduleListDialog extends StatefulWidget {
 class _ScheduleListDialogState extends State<ScheduleListDialog> {
   final ScheduleManager _sm;
   bool _updating = false;
+  bool _scheduleChanged = false;
 
   _ScheduleListDialogState(this._sm);
 
@@ -623,7 +625,11 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
                 : () async {
                     setState(() => _updating = true);
                     try {
-                      await _sm.changeActive(schedule.name);
+                      Schedule currentActive = await _sm.activeSchedule;
+                      if (schedule.name != currentActive.name) {
+                        await _sm.changeActive(schedule.name);
+                        _scheduleChanged = true;
+                      }
                     } on ConnectionTimeout catch (error) {
                       showDialog(
                           context: context,
@@ -632,7 +638,7 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
                                 context: context,
                               ));
                     }
-                    Navigator.pop(context);
+                    Navigator.pop(context, _scheduleChanged);
                   },
           ),
         );
@@ -657,7 +663,8 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
           builder: (_) => errorAlert(
             error,
             title: 'Server Error',
-            message: 'Could not retrieve schedules. Please check your connection.',
+            message:
+                'Could not retrieve schedules. Please check your connection.',
             context: context,
           ),
         ),
@@ -679,7 +686,7 @@ class _ScheduleListDialogState extends State<ScheduleListDialog> {
             AsyncSnapshot<List<SimpleDialogOption>> snapshot) {
           if (snapshot.hasError) {
             print(snapshot.error);
-             return SimpleDialog(
+            return SimpleDialog(
               title: const Text('Select schedule'),
               children: snapshot.data!,
             );
