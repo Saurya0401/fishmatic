@@ -33,6 +33,8 @@ class Limits {
 
 class Timeouts {
   static const Duration cnxn = Duration(seconds: 20);
+  static const Duration pairing = Duration(minutes: 1);
+  static const Duration discovery = Duration(minutes: 2);
 
   Duration timeout(int seconds) => Duration(seconds: seconds);
 }
@@ -41,13 +43,23 @@ class LightFlags {
   final bool _lightOnFlag;
   final bool _autoLightOnFlag;
 
-  LightFlags(this._lightOnFlag, this._autoLightOnFlag);
+  const LightFlags(this._lightOnFlag, this._autoLightOnFlag);
 
   bool get lightOnFlag => _lightOnFlag;
   bool get autoLightOnFlag => _autoLightOnFlag;
 
   @override
   String toString() => 'light: $_lightOnFlag, auto: $_autoLightOnFlag';
+}
+
+class Pair<T1, T2> {
+  final T1 _first;
+  final T2 _last;
+
+  Pair(this._first, this._last);
+
+  T1 get first => _first;
+  T2 get second => _last;
 }
 
 class StreamData {
@@ -126,4 +138,17 @@ class Schedule {
 
   @override
   String toString() => 'Schedule<$name: $interval, $sTime, $eTime>';
+}
+
+class SetupCredential {
+  static const String sep = '\t';
+  static const String end = '\n';
+
+  final String ssid;
+  final String password;
+  final String userID;
+
+  const SetupCredential(this.ssid, this.password, this.userID);
+
+  String get payload => <String>[ssid, password, userID].join(sep) + end;
 }
