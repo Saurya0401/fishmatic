@@ -1,8 +1,8 @@
 import 'package:firebase_database/firebase_database.dart' show DatabaseEvent;
 
-import 'package:fishmatic/backend/data_models.dart';
-import 'package:fishmatic/backend/data_access.dart';
-import 'package:fishmatic/backend/exceptions.dart';
+import './data_models.dart';
+import './data_access.dart';
+import './exceptions.dart';
 
 class Fishmatic {
   final String userID;
@@ -14,10 +14,14 @@ class Fishmatic {
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
 
+  // TODO: Login mode flag
+  Future<bool> get setupModeFlag => setupMode.flag;
+  Stream<bool> get onSetupMode => setupMode.flagStream;
+
   Fishmatic(this.userID) {
     lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOn));
     autoLightOn = Flag(GenericDAO<bool>(userID, DataNodes.autoLightOn));
-    setupMode = Flag(GenericDAO<bool>(userID, DataNodes.setupMode));
+    setupMode = Flag(GenericDAO<bool>(userID, DataNodes.setupMode), true);
     feederServo = Servo(GenericDAO<int>(userID, DataNodes.feederServo));
     filterServo = Servo(GenericDAO<int>(userID, DataNodes.filterServo));
     statusMonitor = StatusMonitor(StatusDAO(userID));
@@ -57,15 +61,20 @@ class Fishmatic {
 }
 
 class Flag {
-  GenericDAO<bool> _dataAccess;
-  Flag(this._dataAccess);
+  final bool _defaultState;
+  final GenericDAO<bool> _dataAccess;
+  const Flag(this._dataAccess, [this._defaultState = false]);
 
-  Future<void> initialise() async => await this._dataAccess.init(false);
+  Future<void> initialise() async => await this._dataAccess.init(_defaultState);
 
   Future<void> setFlag(bool state) async =>
       await this._dataAccess.setValue(state);
 
   Future<bool> get flag async => await _dataAccess.getValue();
+  Stream<bool> get flagStream =>
+      _dataAccess.getStream().map((event) => event.snapshot.value == null
+          ? _defaultState
+          : event.snapshot.value! as bool);
 }
 
 class Servo {
