@@ -31,6 +31,12 @@ class Limits {
   static const double criticalHighTemp = 35.0;
 }
 
+class RouteNames {
+  static const String home = '/home';
+  static const String login = '/login';
+  static const String setup = '/setup';
+}
+
 class Timeouts {
   static const Duration cnxn = Duration(seconds: 20);
   static const Duration pairing = Duration(minutes: 1);
