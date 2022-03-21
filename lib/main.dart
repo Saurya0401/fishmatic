@@ -101,7 +101,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void initState() {
-    print('home init');
     _fbAuth = FirebaseAuth.instance;
     _foodCtrl = TextEditingController();
     _futureFismaticInitialised = _initFishmatic();
@@ -782,7 +781,7 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () {},
                 tooltip: 'Actions',
                 child: PopupMenuButton(
-                  offset: const Offset(0, -140),
+                  offset: const Offset(0, -190),
                   color: Theme.of(context).canvasColor,
                   icon: Icon(Icons.more_horiz),
                   onCanceled: () {},
@@ -984,7 +983,7 @@ class _HomePageState extends State<HomePage> {
                             .then((_) => Navigator.popAndPushNamed(
                                   context,
                                   '/login',
-                                ).then((_) => _initFishmatic()));
+                                ));
                         break;
                       default:
                         DoNothingAction();
