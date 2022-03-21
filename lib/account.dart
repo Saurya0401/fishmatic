@@ -115,115 +115,116 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Fishmatic',
+          style: TextStyle(
+            fontSize: 25.0,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Welcome to Fishmatic!',
-                    style: Theme.of(context).textTheme.titleLarge,
+          builder: (context, constraints) => SingleChildScrollView(
+            child: Column(
+              children: <Widget>[
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 32.0, horizontal: 16.0),
+                    child: Text(
+                      'Sign up for a new account',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                 ),
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Email',
-                      style: TextStyle(fontSize: 16.0),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 150,
-                    child: TextField(
-                      enabled: !_signingUp,
-                      controller: _emailCtrl!,
-                      decoration: InputDecoration(
-                          errorText: _validEmail ? null : 'Please enter email'),
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Password',
-                      style: TextStyle(fontSize: 16.0),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: SizedBox(
-                      width: 150,
-                      child: TextField(
+                SizedBox(
+                  width: 250.0,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5.0),
+                        child: Text(
+                          'Email',
+                          style: TextStyle(fontSize: 16.0),
+                        ),
+                      ),
+                      TextField(
+                        enabled: !_signingUp,
+                        controller: _emailCtrl!,
+                        decoration: InputDecoration(
+                            isDense: true,
+                            errorText:
+                                _validEmail ? null : 'Please enter email'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20.0),
+                        child: Text(
+                          'Password',
+                          style: TextStyle(fontSize: 16.0),
+                        ),
+                      ),
+                      TextField(
                         enabled: !_signingUp,
                         controller: _passCtrl!,
                         obscureText: true,
                         decoration: InputDecoration(
+                            isDense: true,
                             errorText:
                                 _validPass ? null : 'Please enter password'),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Confirm Password',
-                      style: TextStyle(fontSize: 16.0),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: SizedBox(
-                      width: 150,
-                      child: TextField(
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20.0),
+                        child: Text(
+                          'Confirm Password',
+                          style: TextStyle(fontSize: 16.0),
+                        ),
+                      ),
+                      TextField(
                         enabled: !_signingUp,
                         controller: _confCtrl!,
                         obscureText: true,
                         decoration: InputDecoration(
+                            isDense: true,
                             errorText: _validConf ? null : _confError),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _signingUp
-                        ? null
-                        : ElevatedButton(
-                            onPressed: () async => await _signUp(),
-                            child: Text('Sign Up'),
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Center(
+                          child: SizedBox(
+                            width: 88,
+                            child: ElevatedButton(
+                              onPressed: _signingUp
+                                  ? null
+                                  : () async => await _signUp(),
+                              child: _signingUp
+                                  ? SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : Text('Sign Up'),
+                            ),
                           ),
-                  ),
-                ],
-              ),
-              if (_statusText != null)
-                Text(
-                  _statusText!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _signUpSuccess ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+                if (_statusText != null)
+                  Text(
+                    _statusText!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _signUpSuccess ? Colors.green : Colors.red,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -272,9 +273,9 @@ class _LoginPageState extends State<LoginPage> {
         Navigator.popAndPushNamed(context, RouteNames.home);
       } on FirebaseAuthException catch (error) {
         if (error.code == 'user-not-found') {
-          _showError('User not found, please sign-up.');
+          _showError('User not found, please sign-up');
         } else if (error.code == 'wrong-password') {
-          _showError('Wrong password.');
+          _showError('Incorrect password');
         }
       }
     }
@@ -306,112 +307,122 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Fishmatic',
+          style: TextStyle(
+            fontSize: 25.0,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: LayoutBuilder(
-          builder: (context, constraints) => Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    'Welcome to Fishmatic!',
-                    style: Theme.of(context).textTheme.titleLarge,
+          builder: (context, constraints) => SingleChildScrollView(
+            child: Column(
+              children: <Widget>[
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 32.0, horizontal: 16.0),
+                    child: Text(
+                      'Sign in to your account',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                 ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Email',
-                      style: TextStyle(fontSize: 16.0),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 16.0,
-                  ),
-                  SizedBox(
-                    width: 150,
-                    child: TextField(
-                      enabled: !_loggingIn,
-                      controller: _emailCtrl!,
-                      decoration: InputDecoration(
-                          errorText: _validEmail ? null : 'Please enter email'),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      'Password',
-                      style: TextStyle(fontSize: 16.0),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 16.0,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: SizedBox(
-                      width: 150,
-                      child: TextField(
+                SizedBox(
+                  width: 250.0,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5.0),
+                        child: Text(
+                          'Email',
+                          style: TextStyle(fontSize: 16.0),
+                        ),
+                      ),
+                      TextField(
+                        enabled: !_loggingIn,
+                        controller: _emailCtrl!,
+                        decoration: InputDecoration(
+                            isDense: true,
+                            errorText:
+                                _validEmail ? null : 'Please enter email'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 20.0),
+                        child: Text(
+                          'Password',
+                          style: TextStyle(fontSize: 16.0),
+                        ),
+                      ),
+                      TextField(
                         enabled: !_loggingIn,
                         controller: _passCtrl!,
                         obscureText: true,
                         decoration: InputDecoration(
+                            isDense: true,
                             errorText:
                                 _validPass ? null : 'Please enter password'),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: _loggingIn
-                        ? null
-                        : ElevatedButton(
-                            onPressed: () async => await _login(),
-                            child: Text('Login'),
-                          ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(0.0, 16.0, 16.0, 16.0),
-                    child: _loggingIn
-                        ? null
-                        : ElevatedButton(
-                            onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => SignUpPage(
-                                  fbAuth: _fbAuth!,
-                                ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(24.0),
+                            child: SizedBox(
+                              width: 88,
+                              child: ElevatedButton(
+                                onPressed: _loggingIn
+                                    ? null
+                                    : () async => await _login(),
+                                child: _loggingIn
+                                    ? SizedBox(
+                                        height: 22,
+                                        width: 22,
+                                        child: CircularProgressIndicator())
+                                    : Text(' Login '),
                               ),
                             ),
-                            child: Text('Sign Up'),
                           ),
-                  ),
-                ],
-              ),
-              if (_statusText != null)
-                Text(
-                  _statusText!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: _loginSuccess ? Colors.green : Colors.red,
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                                0.0, 24.0, 24.0, 24.0),
+                            child: SizedBox(
+                              width: 88,
+                              child: ElevatedButton(
+                                onPressed: _loggingIn
+                                    ? null
+                                    : () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => SignUpPage(
+                                              fbAuth: _fbAuth!,
+                                            ),
+                                          ),
+                                        ),
+                                child: Text('Sign Up'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-            ],
+                if (_statusText != null)
+                  Text(
+                    _statusText!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _loginSuccess ? Colors.green : Colors.red,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
