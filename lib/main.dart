@@ -28,7 +28,6 @@ class FishmaticApp extends StatefulWidget {
 }
 
 class _FishmaticAppState extends State<FishmaticApp> {
-  // TODO: Fix null check error
   FirebaseAuth? _fbAuth;
   Future<bool>? _futureCheckSignedIn;
 
@@ -115,7 +114,6 @@ class _HomePageState extends State<HomePage> {
 
   Future<bool> _initFishmatic() async {
     try {
-      _fbAuth ??= FirebaseAuth.instance;
       print('Logged in as user ${_fbAuth!.currentUser!.uid}');
       _fishmatic = Fishmatic(_fbAuth!.currentUser!.uid);
       await _fishmatic!.initialise().timeout(
@@ -183,27 +181,28 @@ class _HomePageState extends State<HomePage> {
 
   void _initFutures() {
     _valuesStream = CombineLatestStream.combine3(
-        _statusMonitor!.getValueStream(
-          DataNodes.waterTemp,
-          maxWarning: Limits.highTemp,
-          maxCritical: Limits.criticalHighTemp,
-          minWarning: Limits.lowTemp,
-          minCritical: Limits.criticalLowTemp,
-        ),
-        _statusMonitor!.getValueStream(
-          DataNodes.foodLevel,
-          minWarning: Limits.lowFood,
-          minCritical: Limits.criticalLowFood,
-          isFoodLevel: true,
-        ),
-        _statusMonitor!.getValueStream(
-          DataNodes.lightLevel,
-          minCritical: Limits.criticalLowLight.toDouble(),
-          maxCritical: Limits.criticalHighLight.toDouble(),
-        ),
-        (StreamData a, StreamData b, StreamData c) => [a, b, c]);
+            _statusMonitor!.getValueStream(
+              DataNodes.waterTemp,
+              maxWarning: Limits.highTemp,
+              maxCritical: Limits.criticalHighTemp,
+              minWarning: Limits.lowTemp,
+              minCritical: Limits.criticalLowTemp,
+            ),
+            _statusMonitor!.getValueStream(
+              DataNodes.foodLevel,
+              minWarning: Limits.lowFood,
+              minCritical: Limits.criticalLowFood,
+              isFoodLevel: true,
+            ),
+            _statusMonitor!.getValueStream(
+              DataNodes.lightLevel,
+              minCritical: Limits.criticalLowLight.toDouble(),
+              maxCritical: Limits.criticalHighLight.toDouble(),
+            ),
+            (StreamData a, StreamData b, StreamData c) => [a, b, c])
+        .asBroadcastStream();
     _activeSchedule = _getActiveSchedule();
-    _setupMode = _fishmatic!.onSetupMode;
+    _setupMode = _fishmatic!.onSetupMode.asBroadcastStream();
   }
 
   void _refresh() {
@@ -411,6 +410,442 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  StreamBuilder<List<StreamData>> _valuesStreamBuilder() {
+    print('building values stream');
+    return StreamBuilder<List<StreamData>>(
+      stream: _valuesStream!,
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final StreamData _tempData = snapshot.data![0];
+          final StreamData _foodData = snapshot.data![1];
+          final StreamData _lightData = snapshot.data![2];
+          if (_tempData.value != null && _tempData.status != null) {
+            _waterTemp = _tempData.value!;
+            _waterTempStatus = _tempData.status!;
+            _updateTempNotif();
+            print('water temperature updated: ${_tempData.toString()}');
+          }
+          if (_foodData.value != null && _foodData.status != null) {
+            _foodLevel = _foodData.value!;
+            _foodLevelStatus = _foodData.status!;
+            _updateFoodNotif();
+            print('food level updated: ${_foodData.toString()}');
+          }
+          if (_lightData.value != null && _lightData.status != null) {
+            _lightLevelStatus = _lightData.status!;
+            print('light level updated: ${_lightData.toString()}');
+          }
+        } else if (snapshot.hasError) {
+          print('Error: ${snapshot.error.toString()}');
+        }
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ListView(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Flexible(
+                      flex: 1,
+                      fit: FlexFit.loose,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(8.0, 8.0, 8.0, 0.0),
+                        child: SizedBox(
+                          height: _gaugeHeight,
+                          child: _getRadialGauge(
+                              title: 'Temperature',
+                              value: _waterTemp,
+                              valueStatus: _waterTempStatus,
+                              gaugeMin: 10,
+                              gaugeMax: 40,
+                              minWarning: Limits.lowTemp,
+                              minCritical: Limits.criticalLowTemp,
+                              maxWarning: Limits.highTemp,
+                              maxCritical: Limits.criticalHighTemp,
+                              unit: '\u2103'),
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      flex: 1,
+                      fit: FlexFit.loose,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(8.0, 8.0, 8.0, 0.0),
+                        child: SizedBox(
+                          height: _gaugeHeight,
+                          child: _getRadialGauge(
+                            title: 'Food Level',
+                            value: _foodLevel,
+                            valueStatus: _foodLevelStatus,
+                            gaugeMin: 0,
+                            gaugeMax: 100,
+                            minWarning: Limits.lowFood,
+                            minCritical: Limits.criticalLowFood,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_tempNotif != null) _tempNotif!,
+                if (_foodNotif != null) _foodNotif!,
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: StatefulBuilder(
+                  builder: (BuildContext context, StateSetter setState) {
+                return FutureBuilder<LightFlags>(
+                    future: _fishmatic!.setLight(_lightLevelStatus),
+                    builder: (context, snapshot) {
+                      bool waiting = true;
+                      bool lightOn = false;
+                      bool autoLight = false;
+                      if (snapshot.hasData) {
+                        lightOn = snapshot.data!.lightOnFlag;
+                        autoLight = snapshot.data!.autoLightOnFlag;
+                        waiting = false;
+                        print(snapshot.data);
+                      }
+                      return Row(
+                        children: <Flexible>[
+                          Flexible(
+                            flex: 6,
+                            fit: FlexFit.tight,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                'Lights',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Flexible(
+                            flex: 3,
+                            fit: FlexFit.tight,
+                            child: waiting
+                                ? SizedBox(
+                                    height: 4,
+                                    child: LinearProgressIndicator(),
+                                  )
+                                : Switch(
+                                    value: lightOn,
+                                    onChanged: autoLight
+                                        ? null
+                                        : (value) async {
+                                            await _fishmatic!.setLight(
+                                                _lightLevelStatus, value);
+                                            setState(() {});
+                                          },
+                                  ),
+                          ),
+                          Flexible(
+                            flex: 1,
+                            fit: FlexFit.tight,
+                            child: Checkbox(
+                              value: autoLight,
+                              onChanged: waiting
+                                  ? null
+                                  : (value) async {
+                                      await _fishmatic!.setAutoLight(
+                                          value!, _lightLevelStatus);
+                                      setState(() {});
+                                    },
+                            ),
+                          ),
+                          Flexible(
+                            flex: 2,
+                            fit: FlexFit.tight,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(4.0, 8.0, 8.0, 8.0),
+                              child: Text(
+                                'Auto',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    });
+              }),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  FutureBuilder<Schedule> _activeScheduleBuilder() {
+    return FutureBuilder<Schedule>(
+      future: _activeSchedule!,
+      builder: (context, snapshot) {
+        print('current active: ${snapshot.data}');
+        late Widget _child;
+        switch (snapshot.connectionState) {
+          case ConnectionState.active:
+          case ConnectionState.waiting:
+            _child = Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            );
+            break;
+          case ConnectionState.none:
+            break;
+          case ConnectionState.done:
+            final Schedule _active = snapshot.data!;
+            if (_active.isNull) {
+              _child = Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'No Active Schedule',
+                  style: TextStyle(
+                    fontSize: 20,
+                  ),
+                ),
+              );
+            } else {
+              _child = infoList(_active.name, {
+                Icon(Icons.timer): _active.intervalStr,
+                Icon(Icons.fastfood): _active.amountStr,
+                Icon(Icons.timelapse): _active.durationStr,
+              }, <ButtonInfo>[
+                ButtonInfo('Edit', () {
+                  showDialog<bool>(
+                    context: context,
+                    builder: (_) => ScheduleDialog(
+                      _scheduleManager!,
+                      initial: _active,
+                    ),
+                  ).then((scheduleEdited) {
+                    if (scheduleEdited ?? false) {
+                      try {
+                        _refresh();
+                      } on ConnectionTimeout catch (error) {
+                        showDialog(
+                            context: context,
+                            builder: (_) =>
+                                errorAlert(error, context: context));
+                      }
+                    }
+                  });
+                }, Theme.of(context).colorScheme.primary),
+                ButtonInfo('Change', () {
+                  showDialog<bool>(
+                    context: context,
+                    builder: (_) => ScheduleListDialog(_scheduleManager!),
+                  ).then((scheduleChanged) {
+                    print(scheduleChanged);
+                    if (scheduleChanged ?? false) {
+                      try {
+                        _refresh();
+                      } on ConnectionTimeout catch (error) {
+                        showDialog(
+                            context: context,
+                            builder: (_) =>
+                                errorAlert(error, context: context));
+                      }
+                    }
+                  });
+                }, Theme.of(context).colorScheme.primary),
+              ]);
+            }
+            break;
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(4.0, 8.0, 4.0, 0.0),
+          child: Card(
+            child: Center(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16.0, top: 16.0),
+                    child: Row(
+                      children: <Widget>[
+                        Text(
+                          'Current Schedule',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity(
+                              vertical: VisualDensity.minimumDensity),
+                          onPressed: () {
+                            try {
+                              _refresh();
+                            } on ConnectionTimeout catch (error) {
+                              showDialog(
+                                  context: context,
+                                  builder: (_) =>
+                                      errorAlert(error, context: context));
+                            }
+                          },
+                          icon: Icon(
+                            Icons.refresh,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _child,
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  StatefulBuilder _feedDialog(BuildContext context) {
+    bool _validFood = true;
+    bool _isFeeding = false;
+    bool _done = false;
+    bool _fail = false;
+    String? _statusText;
+
+    return StatefulBuilder(
+      builder: (BuildContext context, StateSetter setState) => AlertDialog(
+        insetPadding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 24.0),
+        contentPadding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
+        title: Text('Feed Fish'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                children: <Widget>[
+                  Flexible(
+                    flex: 2,
+                    fit: FlexFit.loose,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16.0),
+                      child: Icon(Icons.fastfood),
+                    ),
+                  ),
+                  Flexible(
+                    flex: 10,
+                    fit: FlexFit.loose,
+                    child: TextField(
+                      controller: _foodCtrl,
+                      decoration: InputDecoration(
+                          hintText: 'Enter food amount',
+                          errorText: _validFood
+                              ? null
+                              : 'Please enter a valid amount'),
+                    ),
+                  ),
+                  Flexible(
+                    flex: 4,
+                    fit: FlexFit.loose,
+                    child: TextButton(
+                      onPressed: () {},
+                      child: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Center(
+                          child: Text('Auto'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_statusText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  _statusText!,
+                  style: TextStyle(color: _done ? Colors.green : Colors.red),
+                ),
+              ),
+          ],
+        ),
+        actions: <Widget>[
+          ListTile(
+            title: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                primary: _done
+                    ? Colors.green
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              child: (_done || _fail)
+                  ? Text(
+                      'Close',
+                      style: TextStyle(fontSize: 16),
+                    )
+                  : _isFeeding
+                      ? Container(
+                          width: 22.0,
+                          height: 22.0,
+                          child: CircularProgressIndicator(),
+                        )
+                      : Text(
+                          'Dispense',
+                          style: TextStyle(fontSize: 16),
+                        ),
+              onPressed: (_done || _fail)
+                  ? () => Navigator.pop(context)
+                  : _isFeeding
+                      ? null
+                      : () async {
+                          setState(() {
+                            _validFood = true;
+                            if (_foodCtrl!.text.isEmpty ||
+                                double.tryParse(_foodCtrl!.text) == null)
+                              _validFood = false;
+                          });
+                          if (_validFood) {
+                            FocusScopeNode _currentFocus =
+                                FocusScope.of(context);
+                            if (!_currentFocus.hasPrimaryFocus)
+                              _currentFocus.unfocus();
+                            setState(() => _isFeeding = true);
+                            try {
+                              await _fishmatic!
+                                  .feedFish(
+                                      double.parse(_foodCtrl!.text), _foodLevel)
+                                  .timeout(Timeouts.cnxn,
+                                      onTimeout: () => throw ConnectionTimeout(
+                                          'Fish feeding failed.'));
+                              setState(() {
+                                _done = true;
+                                _statusText = 'Feeding successful';
+                              });
+                            } on CriticalFoodException catch (e) {
+                              setState(() {
+                                _fail = true;
+                                _statusText = e.errorText;
+                              });
+                            } on ConnectionTimeout catch (e) {
+                              setState(() {
+                                _fail = true;
+                                _statusText = e.errorText;
+                              });
+                            }
+                          }
+                        },
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
@@ -426,604 +861,175 @@ class _HomePageState extends State<HomePage> {
           );
         } else if (snapshot.hasData) {
           if (snapshot.data!) {
-            return Scaffold(
-              appBar: AppBar(
-                title: Text(
-                  widget.title,
-                  style: TextStyle(
-                    fontSize: 25.0,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-                centerTitle: true,
-              ),
-              body: SafeArea(
-                child: LayoutBuilder(
-                  builder: (BuildContext context,
-                          BoxConstraints viewportConstraints) =>
-                      SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        StreamBuilder<List<StreamData>>(
-                          stream: _valuesStream!,
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData) {
-                              final StreamData _tempData = snapshot.data![0];
-                              final StreamData _foodData = snapshot.data![1];
-                              final StreamData _lightData = snapshot.data![2];
-                              if (_tempData.value != null &&
-                                  _tempData.status != null) {
-                                _waterTemp = _tempData.value!;
-                                _waterTempStatus = _tempData.status!;
-                                _updateTempNotif();
-                                print(
-                                    'water temperature updated: ${_tempData.toString()}');
-                              }
-                              if (_foodData.value != null &&
-                                  _foodData.status != null) {
-                                _foodLevel = _foodData.value!;
-                                _foodLevelStatus = _foodData.status!;
-                                _updateFoodNotif();
-                                print(
-                                    'food level updated: ${_foodData.toString()}');
-                              }
-                              if (_lightData.value != null &&
-                                  _lightData.status != null) {
-                                _lightLevelStatus = _lightData.status!;
-                                print(
-                                    'light level updated: ${_lightData.toString()}');
-                              }
-                            } else if (snapshot.hasError) {
-                              print('Error: ${snapshot.error.toString()}');
-                            }
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                ListView(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  children: <Widget>[
-                                    Row(
-                                      children: <Widget>[
-                                        Flexible(
-                                          flex: 1,
-                                          fit: FlexFit.loose,
-                                          child: Padding(
-                                            padding: EdgeInsets.fromLTRB(
-                                                8.0, 8.0, 8.0, 0.0),
-                                            child: SizedBox(
-                                              height: _gaugeHeight,
-                                              child: _getRadialGauge(
-                                                  title: 'Temperature',
-                                                  value: _waterTemp,
-                                                  valueStatus: _waterTempStatus,
-                                                  gaugeMin: 10,
-                                                  gaugeMax: 40,
-                                                  minWarning: Limits.lowTemp,
-                                                  minCritical:
-                                                      Limits.criticalLowTemp,
-                                                  maxWarning: Limits.highTemp,
-                                                  maxCritical:
-                                                      Limits.criticalHighTemp,
-                                                  unit: '\u2103'),
-                                            ),
-                                          ),
-                                        ),
-                                        Flexible(
-                                          flex: 1,
-                                          fit: FlexFit.loose,
-                                          child: Padding(
-                                            padding: EdgeInsets.fromLTRB(
-                                                8.0, 8.0, 8.0, 0.0),
-                                            child: SizedBox(
-                                              height: _gaugeHeight,
-                                              child: _getRadialGauge(
-                                                title: 'Food Level',
-                                                value: _foodLevel,
-                                                valueStatus: _foodLevelStatus,
-                                                gaugeMin: 0,
-                                                gaugeMax: 100,
-                                                minWarning: Limits.lowFood,
-                                                minCritical:
-                                                    Limits.criticalLowFood,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (_tempNotif != null) _tempNotif!,
-                                    if (_foodNotif != null) _foodNotif!,
-                                  ],
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: StatefulBuilder(builder:
-                                      (BuildContext context,
-                                          StateSetter setState) {
-                                    return FutureBuilder<LightFlags>(
-                                        future: _fishmatic!
-                                            .setLight(_lightLevelStatus),
-                                        builder: (context, snapshot) {
-                                          bool waiting = true;
-                                          bool lightOn = false;
-                                          bool autoLight = false;
-                                          if (snapshot.hasData) {
-                                            lightOn =
-                                                snapshot.data!.lightOnFlag;
-                                            autoLight =
-                                                snapshot.data!.autoLightOnFlag;
-                                            waiting = false;
-                                            print(snapshot.data);
-                                          }
-                                          return Row(
-                                            children: <Flexible>[
-                                              Flexible(
-                                                flex: 6,
-                                                fit: FlexFit.tight,
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.all(8.0),
-                                                  child: Text(
-                                                    'Lights',
-                                                    style: TextStyle(
-                                                      fontSize: 20,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              Flexible(
-                                                flex: 3,
-                                                fit: FlexFit.tight,
-                                                child: waiting
-                                                    ? SizedBox(
-                                                        height: 4,
-                                                        child:
-                                                            LinearProgressIndicator(),
-                                                      )
-                                                    : Switch(
-                                                        value: lightOn,
-                                                        onChanged: autoLight
-                                                            ? null
-                                                            : (value) async {
-                                                                await _fishmatic!
-                                                                    .setLight(
-                                                                        _lightLevelStatus,
-                                                                        value);
-                                                                setState(() {});
-                                                              },
-                                                      ),
-                                              ),
-                                              Flexible(
-                                                flex: 1,
-                                                fit: FlexFit.tight,
-                                                child: Checkbox(
-                                                  value: autoLight,
-                                                  onChanged: waiting
-                                                      ? null
-                                                      : (value) async {
-                                                          await _fishmatic!
-                                                              .setAutoLight(
-                                                                  value!,
-                                                                  _lightLevelStatus);
-                                                          setState(() {});
-                                                        },
-                                                ),
-                                              ),
-                                              Flexible(
-                                                flex: 2,
-                                                fit: FlexFit.tight,
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.fromLTRB(
-                                                          4.0, 8.0, 8.0, 8.0),
-                                                  child: Text(
-                                                    'Auto',
-                                                    style: TextStyle(
-                                                      fontSize: 16,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          );
-                                        });
-                                  }),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        FutureBuilder<Schedule>(
-                          future: _activeSchedule!,
-                          builder: (context, snapshot) {
-                            print('current active: ${snapshot.data}');
-                            late Widget _child;
-                            switch (snapshot.connectionState) {
-                              case ConnectionState.active:
-                              case ConnectionState.waiting:
-                                _child = Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                );
-                                break;
-                              case ConnectionState.none:
-                                break;
-                              case ConnectionState.done:
-                                final Schedule _active = snapshot.data!;
-                                if (_active.isNull) {
-                                  _child = Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Text(
-                                      'No Active Schedule',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                      ),
-                                    ),
-                                  );
-                                } else {
-                                  _child = infoList(_active.name, {
-                                    Icon(Icons.timer): _active.intervalStr,
-                                    Icon(Icons.fastfood): _active.amountStr,
-                                    Icon(Icons.timelapse): _active.durationStr,
-                                  }, <ButtonInfo>[
-                                    ButtonInfo('Edit', () {
-                                      showDialog<bool>(
-                                        context: context,
-                                        builder: (_) => ScheduleDialog(
-                                          _scheduleManager!,
-                                          initial: _active,
-                                        ),
-                                      ).then((scheduleEdited) {
-                                        if (scheduleEdited ?? false) {
-                                          try {
-                                            _refresh();
-                                          } on ConnectionTimeout catch (error) {
-                                            showDialog(
-                                                context: context,
-                                                builder: (_) => errorAlert(
-                                                    error,
-                                                    context: context));
-                                          }
-                                        }
-                                      });
-                                    }, Theme.of(context).colorScheme.primary),
-                                    ButtonInfo('Change', () {
-                                      showDialog<bool>(
-                                        context: context,
-                                        builder: (_) => ScheduleListDialog(
-                                            _scheduleManager!),
-                                      ).then((scheduleChanged) {
-                                        print(scheduleChanged);
-                                        if (scheduleChanged ?? false) {
-                                          try {
-                                            _refresh();
-                                          } on ConnectionTimeout catch (error) {
-                                            showDialog(
-                                                context: context,
-                                                builder: (_) => errorAlert(
-                                                    error,
-                                                    context: context));
-                                          }
-                                        }
-                                      });
-                                    }, Theme.of(context).colorScheme.primary),
-                                  ]);
-                                }
-                                break;
-                            }
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(4.0, 8.0, 4.0, 0.0),
-                              child: Card(
-                                child: Center(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: <Widget>[
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 16.0, top: 16.0),
-                                        child: Row(
-                                          children: <Widget>[
-                                            Text(
-                                              'Current Schedule',
-                                              style: TextStyle(
-                                                  fontSize: 20,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                            IconButton(
-                                              padding: EdgeInsets.zero,
-                                              visualDensity: VisualDensity(
-                                                  vertical: VisualDensity
-                                                      .minimumDensity),
-                                              onPressed: () {
-                                                try {
-                                                  _refresh();
-                                                } on ConnectionTimeout catch (error) {
-                                                  showDialog(
-                                                      context: context,
-                                                      builder: (_) =>
-                                                          errorAlert(
-                                                              error,
-                                                              context:
-                                                                  context));
-                                                }
-                                              },
-                                              icon: Icon(
-                                                Icons.refresh,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      _child,
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              floatingActionButton: FloatingActionButton(
-                onPressed: () {},
-                tooltip: 'Actions',
-                child: PopupMenuButton(
-                  offset: const Offset(0, -190),
-                  color: Theme.of(context).canvasColor,
-                  icon: Icon(Icons.more_horiz),
-                  onCanceled: () {},
-                  onSelected: (int option) {
-                    switch (option) {
-                      case 0:
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => SchedulesPage(_scheduleManager!),
+            return StreamBuilder<bool>(
+                stream: _setupMode,
+                builder: (context, snapshot) {
+                  if (snapshot.hasData) {
+                    if (snapshot.data != null) {
+                      bool onSetupMode = snapshot.data!;
+                      return Scaffold(
+                        appBar: AppBar(
+                          title: Text(
+                            widget.title,
+                            style: TextStyle(
+                              fontSize: 25.0,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
-                        ).then((_) {
-                          try {
-                            _refresh();
-                          } on ConnectionTimeout catch (error) {
-                            showDialog(
-                                context: context,
-                                builder: (_) =>
-                                    errorAlert(error, context: context));
-                          }
-                        });
-                        break;
-                      case 1:
-                        showDialog(
-                            context: context,
-                            builder: (BuildContext context) {
-                              bool _validFood = true;
-                              bool _isFeeding = false;
-                              bool _done = false;
-                              bool _fail = false;
-                              String? _statusText;
-
-                              return StatefulBuilder(
-                                builder: (BuildContext context,
-                                        StateSetter setState) =>
-                                    AlertDialog(
-                                  insetPadding: EdgeInsets.symmetric(
-                                      horizontal: 8.0, vertical: 24.0),
-                                  contentPadding: EdgeInsets.fromLTRB(
-                                      16.0, 16.0, 16.0, 0.0),
-                                  title: Text('Feed Fish'),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: <Widget>[
-                                      Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 8.0),
-                                        child: Row(
-                                          children: <Widget>[
-                                            Flexible(
-                                              flex: 2,
-                                              fit: FlexFit.loose,
-                                              child: Padding(
-                                                padding: const EdgeInsets.only(
-                                                    right: 16.0),
-                                                child: Icon(Icons.fastfood),
-                                              ),
+                          centerTitle: true,
+                        ),
+                        body: SafeArea(
+                          child: LayoutBuilder(
+                            builder: (BuildContext context,
+                                    BoxConstraints viewportConstraints) =>
+                                SingleChildScrollView(
+                              child: onSetupMode
+                                  ? Center(
+                                      child: Column(
+                                        children: <Widget>[
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 32.0,
+                                                horizontal: 16.0),
+                                            child: Text(
+                                              'Setup Required',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleLarge,
                                             ),
-                                            Flexible(
-                                              flex: 10,
-                                              fit: FlexFit.loose,
-                                              child: TextField(
-                                                controller: _foodCtrl,
-                                                decoration: InputDecoration(
-                                                    hintText:
-                                                        'Enter food amount',
-                                                    errorText: _validFood
-                                                        ? null
-                                                        : 'Please enter a valid amount'),
-                                              ),
-                                            ),
-                                            Flexible(
-                                              flex: 4,
-                                              fit: FlexFit.loose,
-                                              child: TextButton(
-                                                onPressed: () {},
-                                                child: Padding(
-                                                  padding:
-                                                      const EdgeInsets.all(8.0),
-                                                  child: Center(
-                                                    child: Text('Auto'),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      if (_statusText != null)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 8.0),
-                                          child: Text(
-                                            _statusText!,
-                                            style: TextStyle(
-                                                color: _done
-                                                    ? Colors.green
-                                                    : Colors.red),
                                           ),
-                                        ),
-                                    ],
-                                  ),
-                                  actions: <Widget>[
-                                    ListTile(
-                                      title: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          primary: _done
-                                              ? Colors.green
-                                              : Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
-                                        ),
-                                        child: (_done || _fail)
-                                            ? Text(
-                                                'Close',
+                                          SizedBox(
+                                            width: 250,
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 32.0,
+                                                      horizontal: 16.0),
+                                              child: Text(
+                                                'Your fish feeder needs to be set up for full functionality.',
                                                 style: TextStyle(fontSize: 16),
-                                              )
-                                            : _isFeeding
-                                                ? Container(
-                                                    width: 22.0,
-                                                    height: 22.0,
-                                                    child:
-                                                        CircularProgressIndicator(),
-                                                  )
-                                                : Text(
-                                                    'Dispense',
-                                                    style:
-                                                        TextStyle(fontSize: 16),
-                                                  ),
-                                        onPressed: (_done || _fail)
-                                            ? () => Navigator.pop(context)
-                                            : _isFeeding
-                                                ? null
-                                                : () async {
-                                                    setState(() {
-                                                      _validFood = true;
-                                                      if (_foodCtrl!
-                                                              .text.isEmpty ||
-                                                          double.tryParse(
-                                                                  _foodCtrl!
-                                                                      .text) ==
-                                                              null)
-                                                        _validFood = false;
-                                                    });
-                                                    if (_validFood) {
-                                                      FocusScopeNode
-                                                          _currentFocus =
-                                                          FocusScope.of(
-                                                              context);
-                                                      if (!_currentFocus
-                                                          .hasPrimaryFocus)
-                                                        _currentFocus.unfocus();
-                                                      setState(() =>
-                                                          _isFeeding = true);
-                                                      try {
-                                                        await _fishmatic!
-                                                            .feedFish(
-                                                                double.parse(
-                                                                    _foodCtrl!
-                                                                        .text),
-                                                                _foodLevel)
-                                                            .timeout(
-                                                                Timeouts.cnxn,
-                                                                onTimeout: () =>
-                                                                    throw ConnectionTimeout(
-                                                                        'Fish feeding failed.'));
-                                                        setState(() {
-                                                          _done = true;
-                                                          _statusText =
-                                                              'Feeding successful';
-                                                        });
-                                                      } on CriticalFoodException catch (e) {
-                                                        setState(() {
-                                                          _fail = true;
-                                                          _statusText =
-                                                              e.errorText;
-                                                        });
-                                                      } on ConnectionTimeout catch (e) {
-                                                        setState(() {
-                                                          _fail = true;
-                                                          _statusText =
-                                                              e.errorText;
-                                                        });
-                                                      }
-                                                    }
-                                                  },
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                24.0, 0.0, 24.0, 24.0),
+                                            child: ElevatedButton(
+                                              onPressed: () =>
+                                                  Navigator.popAndPushNamed(
+                                                      context,
+                                                      RouteNames.setup),
+                                              child: Text('Proceed'),
+                                            ),
+                                          )
+                                        ],
                                       ),
                                     )
-                                  ],
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        _valuesStreamBuilder(),
+                                        _activeScheduleBuilder(),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                        floatingActionButton: FloatingActionButton(
+                          onPressed: () {},
+                          tooltip: 'Actions',
+                          child: PopupMenuButton(
+                            offset: Offset(0, onSetupMode? -90: -190),
+                            color: Theme.of(context).canvasColor,
+                            icon: Icon(Icons.more_horiz),
+                            onCanceled: () {},
+                            onSelected: (int option) {
+                              switch (option) {
+                                case 0:
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          SchedulesPage(_scheduleManager!),
+                                    ),
+                                  ).then((_) {
+                                    try {
+                                      _refresh();
+                                    } on ConnectionTimeout catch (error) {
+                                      showDialog(
+                                          context: context,
+                                          builder: (_) => errorAlert(error,
+                                              context: context));
+                                    }
+                                  });
+                                  break;
+                                case 1:
+                                  showDialog(
+                                    context: context,
+                                    builder: _feedDialog,
+                                  );
+                                  break;
+                                case 2:
+                                  // TODO: set individual streams to null
+                                  // TODO: or cancel streams by removing corresponding widget from widget tree
+                                  _valuesStream = null;
+                                  _fbAuth!
+                                      .signOut()
+                                      .then((_) => Navigator.popAndPushNamed(
+                                            context,
+                                            '/login',
+                                          ));
+                                  break;
+                                default:
+                                  DoNothingAction();
+                              }
+                            },
+                            itemBuilder: (BuildContext context) =>
+                                <PopupMenuEntry<int>>[
+                              if (!onSetupMode) PopupMenuItem<int>(
+                                value: 0,
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.calendar_today,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                                  title: Text('Schedules'),
                                 ),
-                              );
-                            });
-                        break;
-                      case 2:
-                        _valuesStream = null;
-                        _fbAuth!
-                            .signOut()
-                            .then((_) => Navigator.popAndPushNamed(
-                                  context,
-                                  '/login',
-                                ));
-                        break;
-                      default:
-                        DoNothingAction();
+                              ),
+                              if (!onSetupMode) PopupMenuItem(
+                                value: 1,
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.fastfood,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                                  title: Text('Feed fish'),
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 2,
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.logout,
+                                    color:
+                                        Theme.of(context).colorScheme.secondary,
+                                  ),
+                                  title: Text('Log out'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
                     }
-                  },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
-                    PopupMenuItem<int>(
-                      value: 0,
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.calendar_today,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        title: Text('Schedules'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 1,
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.fastfood,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        title: Text('Feed fish'),
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: 2,
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.logout,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
-                        title: Text('Log out'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
+                  }
+                  return Center(
+                    child: CircularProgressIndicator(),
+                  );
+                });
           }
         }
         return Center(
