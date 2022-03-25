@@ -11,7 +11,8 @@ enum ValueStatus {
 class DataNodes {
   static const String lightOn = 'light_on';
   static const String autoLightOn = 'auto_light';
-  static const String setupMode = "setup_mode";
+  static const String setupMode = 'setup_mode';
+  static const String noConnection = 'no_connection';
   static const String feederServo = 'feeder_servo';
   static const String filterServo = 'filter_servo';
   static const String foodLevel = 'food_level';
@@ -41,6 +42,8 @@ class Timeouts {
   static const Duration cnxn = Duration(seconds: 20);
   static const Duration pairing = Duration(minutes: 1);
   static const Duration discovery = Duration(minutes: 2);
+  static const Duration checkSetup = Duration(minutes: 1);
+  static const Duration enableSetup = Duration(seconds: 30);
 
   Duration timeout(int seconds) => Duration(seconds: seconds);
 }
@@ -147,14 +150,21 @@ class Schedule {
 }
 
 class SetupCredential {
-  static const String sep = '\t';
-  static const String end = '\n';
+  static const String sep = ',';
+  static const String end = ';';
 
-  final String ssid;
-  final String password;
-  final String userID;
+  final String wifiSSID;
+  final String wifiPass;
+  final String userEmail;
+  final String userPass;
 
-  const SetupCredential(this.ssid, this.password, this.userID);
+  const SetupCredential(
+      this.wifiSSID, this.wifiPass, this.userEmail, this.userPass);
 
-  String get payload => <String>[ssid, password, userID].join(sep) + end;
+  String get payload =>
+      <String>[
+        [wifiSSID, wifiPass].join(sep),
+        [userEmail, userPass].join(sep),
+      ].join(end) +
+      '\n';
 }
