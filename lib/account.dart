@@ -23,6 +23,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _signUp() async {
     setState(() {
+      _statusText = null;
       _signingUp = true;
       _validEmail = true;
       _validPass = true;
@@ -51,6 +52,7 @@ class _SignUpPageState extends State<SignUpPage> {
         );
         showDialog(
             context: context,
+            barrierDismissible: false,
             builder: (_) => SimpleDialog(
                   title: Text('Sign Up Success'),
                   children: <Widget>[
@@ -252,6 +254,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _login() async {
     setState(() {
+      _statusText = null;
       _loggingIn = true;
       _validEmail = true;
       _validPass = true;
