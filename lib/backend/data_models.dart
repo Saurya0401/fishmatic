@@ -163,8 +163,8 @@ class SetupCredential {
 
   String get payload =>
       <String>[
-        [wifiSSID, wifiPass].join(sep),
-        [userEmail, userPass].join(sep),
+        <String>[wifiSSID, wifiPass].join(sep),
+        <String>[userEmail, userPass].join(sep),
       ].join(end) +
       '\n';
 }
