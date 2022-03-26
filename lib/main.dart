@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fishmatic/account.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,7 +15,6 @@ import './schedule.dart';
 import './utils.dart';
 
 // TODO: Wrapper function for Exception handling (network, auth, null data)
-// TODO: Email + password authentication
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,9 +90,11 @@ class _HomePageState extends State<HomePage> {
   ScheduleManager? _scheduleManager;
   TextEditingController? _foodCtrl;
   Stream<List<StreamData>>? _valuesStream;
-  Stream<bool>? _setupMode;
+  Stream<List<bool>>? _espConnected;
+  Stream<bool>? _loggedIn;
   Future<Schedule>? _activeSchedule;
   ListTile? _tempNotif, _foodNotif;
+  Timer? _setupTimer;
   double _waterTemp = 0.0;
   double _foodLevel = 0.0;
   ValueStatus _lightLevelStatus = ValueStatus.normal;
@@ -103,12 +106,17 @@ class _HomePageState extends State<HomePage> {
     _fbAuth = FirebaseAuth.instance;
     _foodCtrl = TextEditingController();
     _futureFismaticInitialised = _initFishmatic();
+    _setupTimer = Timer.periodic(Timeouts.checkSetup, (timer) async {
+      await _fishmatic!.testConnection();
+    });
     super.initState();
   }
 
   @override
   void dispose() {
+    _drainStreams();
     _foodCtrl?.dispose();
+    _setupTimer?.cancel();
     super.dispose();
   }
 
@@ -202,11 +210,21 @@ class _HomePageState extends State<HomePage> {
             (StreamData a, StreamData b, StreamData c) => [a, b, c])
         .asBroadcastStream();
     _activeSchedule = _getActiveSchedule();
-    _setupMode = _fishmatic!.onSetupMode.asBroadcastStream();
+    _espConnected = CombineLatestStream.combine2(
+        _fishmatic!.onSetupMode,
+        _fishmatic!.notConnected,
+        (bool a, bool b) => [a, b]).asBroadcastStream();
+    _loggedIn = _fishmatic!.checkLoggedIn(_fbAuth!).asBroadcastStream();
   }
 
   void _refresh() {
     setState(() => _initFutures());
+  }
+
+  void _drainStreams() {
+    _loggedIn?.drain();
+    _espConnected?.drain();
+    _valuesStream?.drain();
   }
 
   void _updateTempNotif() {
@@ -320,12 +338,14 @@ class _HomePageState extends State<HomePage> {
       double? minCritical,
       double? maxCritical,
       String? unit}) {
-    // TODO: Compensate for values that overflow gauge limits
     final Color textColor = _getStatusColor(valueStatus);
     minWarning = minWarning ?? gaugeMin;
     minCritical = minCritical ?? minWarning;
     maxWarning = maxWarning ?? gaugeMax;
     maxCritical = maxCritical ?? maxWarning;
+    double pointerValue = value;
+    if (value < gaugeMin) pointerValue = gaugeMin;
+    if (value > gaugeMax) pointerValue = gaugeMax;
     return SfRadialGauge(
       title: GaugeTitle(
         text: title,
@@ -367,7 +387,7 @@ class _HomePageState extends State<HomePage> {
           ],
           pointers: <GaugePointer>[
             MarkerPointer(
-              value: value,
+              value: pointerValue,
               color: Colors.white,
               markerOffset: 5.5,
               markerType: MarkerType.triangle,
@@ -407,6 +427,57 @@ class _HomePageState extends State<HomePage> {
           ],
         )
       ],
+    );
+  }
+
+  Column _userActionRequired(String title, String info, String routeName) {
+    return Column(
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+        ),
+        SizedBox(
+          width: 250,
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+            child: Text(
+              info,
+              style: TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 24.0),
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.pushReplacementNamed(context, routeName);
+            },
+            child: Text('Proceed'),
+          ),
+        )
+      ],
+    );
+  }
+
+  Column _needsLogin() {
+    return _userActionRequired(
+      'Login Required',
+      'You have been logged out! Please login.',
+      RouteNames.login,
+    );
+  }
+
+  Column _needsSetup() {
+    return _userActionRequired(
+      'Setup Required',
+      'Your fish feeder needs to be set up for full functionality.',
+      RouteNames.setup,
     );
   }
 
@@ -709,6 +780,87 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  FloatingActionButton _actions(bool needsSetup) {
+    return FloatingActionButton(
+      onPressed: () {},
+      tooltip: 'Actions',
+      child: PopupMenuButton(
+        offset: Offset(0, needsSetup ? -90 : -190),
+        color: Theme.of(context).canvasColor,
+        icon: Icon(Icons.more_horiz),
+        onCanceled: () {},
+        onSelected: (int option) {
+          switch (option) {
+            case 0:
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SchedulesPage(_scheduleManager!),
+                ),
+              ).then((_) {
+                try {
+                  _refresh();
+                } on ConnectionTimeout catch (error) {
+                  showDialog(
+                      context: context,
+                      builder: (_) => errorAlert(error, context: context));
+                }
+              });
+              break;
+            case 1:
+              showDialog(
+                context: context,
+                builder: _feedDialog,
+              );
+              break;
+            case 2:
+              _fbAuth!.signOut().then((_) => Navigator.pushReplacementNamed(
+                    context,
+                    '/login',
+                  ));
+              break;
+            default:
+              DoNothingAction();
+          }
+        },
+        itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+          if (!needsSetup)
+            PopupMenuItem<int>(
+              value: 0,
+              child: ListTile(
+                leading: Icon(
+                  Icons.calendar_today,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                title: Text('Schedules'),
+              ),
+            ),
+          if (!needsSetup)
+            PopupMenuItem(
+              value: 1,
+              child: ListTile(
+                leading: Icon(
+                  Icons.fastfood,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                title: Text('Feed fish'),
+              ),
+            ),
+          PopupMenuItem(
+            value: 2,
+            child: ListTile(
+              leading: Icon(
+                Icons.logout,
+                color: Theme.of(context).colorScheme.secondary,
+              ),
+              title: Text('Log out'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   StatefulBuilder _feedDialog(BuildContext context) {
     bool _validFood = true;
     bool _isFeeding = false;
@@ -852,184 +1004,91 @@ class _HomePageState extends State<HomePage> {
       future: _futureFismaticInitialised!,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          // TODO: Add button to try reloading
           print(snapshot.error.toString());
           return Center(
             child: Card(
-              child: Text(snapshot.error.toString()),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(snapshot.error.toString()),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => setState(() {}),
+                      child: Text('Retry'),
+                    )
+                  ],
+                ),
+              ),
             ),
           );
         } else if (snapshot.hasData) {
           if (snapshot.data!) {
             return StreamBuilder<bool>(
-                stream: _setupMode,
-                builder: (context, snapshot) {
-                  if (snapshot.hasData) {
-                    if (snapshot.data != null) {
-                      bool onSetupMode = snapshot.data!;
-                      return Scaffold(
-                        appBar: AppBar(
-                          title: Text(
-                            widget.title,
-                            style: TextStyle(
-                              fontSize: 25.0,
-                              fontStyle: FontStyle.italic,
+              stream: _loggedIn!,
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  bool loggedIn = snapshot.data!;
+                  return StreamBuilder<List<bool>>(
+                    stream: _espConnected!,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        if (snapshot.data != null) {
+                          bool needsSetup =
+                              snapshot.data![0] && snapshot.data![1];
+                          return Scaffold(
+                            appBar: AppBar(
+                              title: Text(
+                                widget.title,
+                                style: TextStyle(
+                                  fontSize: 25.0,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              centerTitle: true,
                             ),
-                          ),
-                          centerTitle: true,
-                        ),
-                        body: SafeArea(
-                          child: LayoutBuilder(
-                            builder: (BuildContext context,
-                                    BoxConstraints viewportConstraints) =>
-                                SingleChildScrollView(
-                              child: onSetupMode
-                                  ? Center(
-                                      child: Column(
-                                        children: <Widget>[
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 32.0,
-                                                horizontal: 16.0),
-                                            child: Text(
-                                              'Setup Required',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .titleLarge,
+                            body: SafeArea(
+                              child: LayoutBuilder(
+                                builder: (BuildContext context,
+                                        BoxConstraints viewportConstraints) =>
+                                    SingleChildScrollView(
+                                  child: !loggedIn
+                                      ? Center(
+                                          child: _needsLogin(),
+                                        )
+                                      : needsSetup
+                                          ? Center(
+                                              child: _needsSetup(),
+                                            )
+                                          : Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: <Widget>[
+                                                _valuesStreamBuilder(),
+                                                _activeScheduleBuilder(),
+                                              ],
                                             ),
-                                          ),
-                                          SizedBox(
-                                            width: 250,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 32.0,
-                                                      horizontal: 16.0),
-                                              child: Text(
-                                                'Your fish feeder needs to be set up for full functionality.',
-                                                style: TextStyle(fontSize: 16),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            ),
-                                          ),
-                                          Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                24.0, 0.0, 24.0, 24.0),
-                                            child: ElevatedButton(
-                                              onPressed: () =>
-                                                  Navigator.popAndPushNamed(
-                                                      context,
-                                                      RouteNames.setup),
-                                              child: Text('Proceed'),
-                                            ),
-                                          )
-                                        ],
-                                      ),
-                                    )
-                                  : Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: <Widget>[
-                                        _valuesStreamBuilder(),
-                                        _activeScheduleBuilder(),
-                                      ],
-                                    ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        floatingActionButton: FloatingActionButton(
-                          onPressed: () {},
-                          tooltip: 'Actions',
-                          child: PopupMenuButton(
-                            offset: Offset(0, onSetupMode? -90: -190),
-                            color: Theme.of(context).canvasColor,
-                            icon: Icon(Icons.more_horiz),
-                            onCanceled: () {},
-                            onSelected: (int option) {
-                              switch (option) {
-                                case 0:
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          SchedulesPage(_scheduleManager!),
-                                    ),
-                                  ).then((_) {
-                                    try {
-                                      _refresh();
-                                    } on ConnectionTimeout catch (error) {
-                                      showDialog(
-                                          context: context,
-                                          builder: (_) => errorAlert(error,
-                                              context: context));
-                                    }
-                                  });
-                                  break;
-                                case 1:
-                                  showDialog(
-                                    context: context,
-                                    builder: _feedDialog,
-                                  );
-                                  break;
-                                case 2:
-                                  // TODO: set individual streams to null
-                                  // TODO: or cancel streams by removing corresponding widget from widget tree
-                                  _valuesStream = null;
-                                  _fbAuth!
-                                      .signOut()
-                                      .then((_) => Navigator.popAndPushNamed(
-                                            context,
-                                            '/login',
-                                          ));
-                                  break;
-                                default:
-                                  DoNothingAction();
-                              }
-                            },
-                            itemBuilder: (BuildContext context) =>
-                                <PopupMenuEntry<int>>[
-                              if (!onSetupMode) PopupMenuItem<int>(
-                                value: 0,
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.calendar_today,
-                                    color:
-                                        Theme.of(context).colorScheme.secondary,
-                                  ),
-                                  title: Text('Schedules'),
-                                ),
-                              ),
-                              if (!onSetupMode) PopupMenuItem(
-                                value: 1,
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.fastfood,
-                                    color:
-                                        Theme.of(context).colorScheme.secondary,
-                                  ),
-                                  title: Text('Feed fish'),
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 2,
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.logout,
-                                    color:
-                                        Theme.of(context).colorScheme.secondary,
-                                  ),
-                                  title: Text('Log out'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                            floatingActionButton:
+                                !loggedIn ? null : _actions(needsSetup),
+                          );
+                        }
+                      }
+                      return Center(
+                        child: CircularProgressIndicator(),
                       );
-                    }
-                  }
-                  return Center(
-                    child: CircularProgressIndicator(),
+                    },
                   );
-                });
+                }
+                return Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
+            );
           }
         }
         return Center(
