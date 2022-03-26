@@ -273,7 +273,7 @@ class _LoginPageState extends State<LoginPage> {
           email: _emailCtrl!.text,
           password: _passCtrl!.text,
         );
-        Navigator.popAndPushNamed(context, RouteNames.home);
+        Navigator.pushReplacementNamed(context, RouteNames.home);
       } on FirebaseAuthException catch (error) {
         if (error.code == 'user-not-found') {
           _showError('User not found, please sign-up');
