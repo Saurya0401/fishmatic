@@ -465,7 +465,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Column _needsLogin() {
+  Column _loginRequired() {
     return _userActionRequired(
       'Login Required',
       'You have been logged out! Please login.',
@@ -473,7 +473,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Column _needsSetup() {
+  Column _setupRequired() {
     return _userActionRequired(
       'Setup Required',
       'Your fish feeder needs to be set up for full functionality.',
@@ -1057,11 +1057,11 @@ class _HomePageState extends State<HomePage> {
                                     SingleChildScrollView(
                                   child: !loggedIn
                                       ? Center(
-                                          child: _needsLogin(),
+                                          child: _loginRequired(),
                                         )
                                       : needsSetup
                                           ? Center(
-                                              child: _needsSetup(),
+                                              child: _setupRequired(),
                                             )
                                           : Column(
                                               mainAxisSize: MainAxisSize.min,
