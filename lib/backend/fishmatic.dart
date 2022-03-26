@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:firebase_database/firebase_database.dart' show DatabaseEvent;
 
 import './data_models.dart';
@@ -9,18 +12,19 @@ class Fishmatic {
   late final Flag lightOn;
   late final Flag autoLightOn;
   late final Flag setupMode;
+  late final Flag noConnection;
   late final Servo feederServo;
   late final Servo filterServo;
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
 
-  // TODO: Login mode flag
-  Future<bool> get setupModeFlag => setupMode.flag;
   Stream<bool> get onSetupMode => setupMode.flagStream;
+  Stream<bool> get notConnected => noConnection.flagStream;
 
   Fishmatic(this.userID) {
     lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOn));
     autoLightOn = Flag(GenericDAO<bool>(userID, DataNodes.autoLightOn));
+    noConnection = Flag(GenericDAO<bool>(userID, DataNodes.noConnection), true);
     setupMode = Flag(GenericDAO<bool>(userID, DataNodes.setupMode), true);
     feederServo = Servo(GenericDAO<int>(userID, DataNodes.feederServo));
     filterServo = Servo(GenericDAO<int>(userID, DataNodes.filterServo));
@@ -32,10 +36,28 @@ class Fishmatic {
   Future<void> initialise() async {
     await lightOn.initialise();
     await autoLightOn.initialise();
+    await noConnection.initialise();
     await setupMode.initialise();
     await feederServo.initialise();
     await filterServo.initialise();
     await statusMonitor.initialise();
+  }
+
+  Stream<bool> checkLoggedIn(FirebaseAuth firebaseAuth) {
+    return firebaseAuth
+        .authStateChanges()
+        .map((user) => user == null ? false : true);
+  }
+
+  Future<void> testConnection() async {
+    print('checking connection...');
+    await noConnection.setFlag(true);
+    Timer(Timeouts.enableSetup, () async {
+      if (await noConnection.flag) {
+        await setupMode.setFlag(true);
+        print('ESP32 in setup mode');
+      }
+    });
   }
 
   Future<void> feedFish(double amount, double currentLevel) async {
