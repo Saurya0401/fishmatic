@@ -61,16 +61,6 @@ class LightFlags {
   String toString() => 'light: $_lightOnFlag, auto: $_autoLightOnFlag';
 }
 
-class Pair<T1, T2> {
-  final T1 _first;
-  final T2 _last;
-
-  Pair(this._first, this._last);
-
-  T1 get first => _first;
-  T2 get second => _last;
-}
-
 class StreamData {
   final ValueStatus? _status;
   final double? _value;
