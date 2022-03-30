@@ -57,17 +57,18 @@ class _FishmaticAppState extends State<FishmaticApp> {
         RouteNames.setup: (_) => SetupPage(),
       },
       home: FutureBuilder<bool>(
-          future: _futureCheckSignedIn,
-          builder: (context, snapshot) {
-            if (snapshot.hasData) {
-              bool _loggedIn = snapshot.data!;
-              print('logged ${_loggedIn ? 'in' : 'out'}');
-              return _loggedIn ? HomePage() : LoginPage();
-            }
-            return Center(
-              child: CircularProgressIndicator(),
-            );
-          }),
+        future: _futureCheckSignedIn,
+        builder: (context, snapshot) {
+          if (snapshot.hasData) {
+            bool _loggedIn = snapshot.data!;
+            print('logged ${_loggedIn ? 'in' : 'out'}');
+            return _loggedIn ? HomePage() : LoginPage();
+          }
+          return Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      ),
     );
   }
 }
@@ -430,7 +431,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Column _userActionRequired(String title, String info, String routeName) {
+  Column _userActionRequired(String title, String info, String routeName,
+      [Object? routeArgs]) {
     return Column(
       children: <Widget>[
         Padding(
@@ -456,7 +458,11 @@ class _HomePageState extends State<HomePage> {
           padding: const EdgeInsets.fromLTRB(24.0, 0.0, 24.0, 24.0),
           child: ElevatedButton(
             onPressed: () {
-              Navigator.pushReplacementNamed(context, routeName);
+              Navigator.pushReplacementNamed(
+                context,
+                routeName,
+                arguments: routeArgs,
+              );
             },
             child: Text('Proceed'),
           ),
@@ -475,10 +481,10 @@ class _HomePageState extends State<HomePage> {
 
   Column _setupRequired() {
     return _userActionRequired(
-      'Setup Required',
-      'Your fish feeder needs to be set up for full functionality.',
-      RouteNames.setup,
-    );
+        'Setup Required',
+        'Your fish feeder needs to be set up for full functionality.',
+        RouteNames.setup,
+        _fishmatic);
   }
 
   StreamBuilder<List<StreamData>> _valuesStreamBuilder() {
@@ -785,7 +791,7 @@ class _HomePageState extends State<HomePage> {
       onPressed: () {},
       tooltip: 'Actions',
       child: PopupMenuButton(
-        offset: Offset(0, needsSetup ? -90 : -190),
+        offset: Offset(0, needsSetup ? -90 : -250),
         color: Theme.of(context).canvasColor,
         icon: Icon(Icons.more_horiz),
         onCanceled: () {},
@@ -814,6 +820,12 @@ class _HomePageState extends State<HomePage> {
               );
               break;
             case 2:
+              showDialog(
+                context: context,
+                builder: _deleteDialog,
+              );
+              break;
+            case 3:
               _fbAuth!.signOut().then((_) => Navigator.pushReplacementNamed(
                     context,
                     '/login',
@@ -846,8 +858,19 @@ class _HomePageState extends State<HomePage> {
                 title: Text('Feed fish'),
               ),
             ),
+          if (!needsSetup)
+            PopupMenuItem(
+              value: 2,
+              child: ListTile(
+                leading: Icon(
+                  Icons.delete,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                title: Text('Delete feeding records'),
+              ),
+            ),
           PopupMenuItem(
-            value: 2,
+            value: 3,
             child: ListTile(
               leading: Icon(
                 Icons.logout,
@@ -861,7 +884,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  StatefulBuilder _feedDialog(BuildContext context) {
+  StatefulBuilder _feedDialog(BuildContext feedContext) {
     bool _validFood = true;
     bool _isFeeding = false;
     bool _done = false;
@@ -869,7 +892,7 @@ class _HomePageState extends State<HomePage> {
     String? _statusText;
 
     return StatefulBuilder(
-      builder: (BuildContext context, StateSetter setState) => AlertDialog(
+      builder: (feedContext, StateSetter feedSetter) => AlertDialog(
         insetPadding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 24.0),
         contentPadding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
         title: Text('Feed Fish'),
@@ -905,7 +928,16 @@ class _HomePageState extends State<HomePage> {
                     flex: 4,
                     fit: FlexFit.loose,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: () async {
+                        double optimalAmount = await _fishmatic!
+                            .foodRecordsManager
+                            .calcOptimalAmount();
+                        if (optimalAmount <= 0)
+                          feedSetter(() => _statusText =
+                              'Not enough data to calculate optimal amount!');
+                        else
+                          _foodCtrl!.text = optimalAmount.toStringAsFixed(1);
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Center(
@@ -933,7 +965,7 @@ class _HomePageState extends State<HomePage> {
               style: ElevatedButton.styleFrom(
                 primary: _done
                     ? Colors.green
-                    : Theme.of(context).colorScheme.primary,
+                    : Theme.of(feedContext).colorScheme.primary,
               ),
               child: (_done || _fail)
                   ? Text(
@@ -951,11 +983,12 @@ class _HomePageState extends State<HomePage> {
                           style: TextStyle(fontSize: 16),
                         ),
               onPressed: (_done || _fail)
-                  ? () => Navigator.pop(context)
+                  ? () => Navigator.pop(feedContext)
                   : _isFeeding
                       ? null
                       : () async {
-                          setState(() {
+                          feedSetter(() {
+                            _statusText = null;
                             _validFood = true;
                             if (_foodCtrl!.text.isEmpty ||
                                 double.tryParse(_foodCtrl!.text) == null)
@@ -963,10 +996,10 @@ class _HomePageState extends State<HomePage> {
                           });
                           if (_validFood) {
                             FocusScopeNode _currentFocus =
-                                FocusScope.of(context);
+                                FocusScope.of(feedContext);
                             if (!_currentFocus.hasPrimaryFocus)
                               _currentFocus.unfocus();
-                            setState(() => _isFeeding = true);
+                            feedSetter(() => _isFeeding = true);
                             try {
                               await _fishmatic!
                                   .feedFish(
@@ -974,17 +1007,17 @@ class _HomePageState extends State<HomePage> {
                                   .timeout(Timeouts.cnxn,
                                       onTimeout: () => throw ConnectionTimeout(
                                           'Fish feeding failed.'));
-                              setState(() {
+                              feedSetter(() {
                                 _done = true;
                                 _statusText = 'Feeding successful';
                               });
                             } on CriticalFoodException catch (e) {
-                              setState(() {
+                              feedSetter(() {
                                 _fail = true;
                                 _statusText = e.errorText;
                               });
                             } on ConnectionTimeout catch (e) {
-                              setState(() {
+                              feedSetter(() {
                                 _fail = true;
                                 _statusText = e.errorText;
                               });
@@ -993,6 +1026,34 @@ class _HomePageState extends State<HomePage> {
                         },
             ),
           )
+        ],
+      ),
+    );
+  }
+
+  StatefulBuilder _deleteDialog(BuildContext deleteContext) {
+    bool deleting = false;
+
+    return StatefulBuilder(
+      builder: (deleteContext, StateSetter setState) => AlertDialog(
+        title: Text('Delete All Records'),
+        content: Text('Are you sure you want to delete all feeding records?'),
+        actions: <Widget>[
+          ElevatedButton(
+            onPressed: deleting
+                ? null
+                : () async {
+                    setState(() => deleting = true);
+                    await _fishmatic!.foodRecordsManager.deleteRecords();
+                    Navigator.pop(deleteContext);
+                  },
+            style: ElevatedButton.styleFrom(primary: Colors.red),
+            child: Text('Yes'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(deleteContext),
+            child: Text('No'),
+          ),
         ],
       ),
     );

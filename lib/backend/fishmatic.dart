@@ -17,6 +17,7 @@ class Fishmatic {
   late final Servo filterServo;
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
+  late final FoodRecordsManager foodRecordsManager;
 
   Stream<bool> get onSetupMode => setupMode.flagStream;
   Stream<bool> get notConnected => noConnection.flagStream;
@@ -31,6 +32,7 @@ class Fishmatic {
     statusMonitor = StatusMonitor(StatusDAO(userID));
     scheduleManager =
         ScheduleManager(ScheduleDAO(userID), Limits.scheduleLimit);
+    foodRecordsManager = FoodRecordsManager(FoodRecordDAO(userID));
   }
 
   Future<void> initialise() async {
@@ -63,6 +65,7 @@ class Fishmatic {
   Future<void> feedFish(double amount, double currentLevel) async {
     if (currentLevel <= Limits.criticalLowFood) throw CriticalFoodException();
     await feederServo.executeCycle(180, 0, 2);
+    await foodRecordsManager.addRecord(amount);
     await statusMonitor.updateFoodLevel(currentLevel - amount);
   }
 
@@ -99,6 +102,24 @@ class Flag {
           : event.snapshot.value! as bool);
 }
 
+class FoodRecordsManager {
+  final FoodRecordDAO _dataAccess;
+
+  FoodRecordsManager(this._dataAccess);
+
+  Future<void> addRecord(double amount) async =>
+      await _dataAccess.addRecord(amount);
+
+  Future<void> deleteRecords() async => await _dataAccess.deleteAllRecords();
+
+  Future<double> calcOptimalAmount() async {
+    List<double> amounts = await _dataAccess.getRecords();
+    print(amounts);
+    if (amounts.isEmpty) return 0;
+    return amounts.reduce((a, b) => a + b) / amounts.length;
+  }
+}
+
 class Servo {
   final GenericDAO<int> _dataAccess;
 
@@ -133,34 +154,34 @@ class ScheduleManager {
     }
   });
 
-  final String dataNode = 'Schedules';
-  final int limit;
-  final ScheduleDAO dataAccess;
+  final String dataNodeLabel = 'Schedules';
+  final int _limit;
+  final ScheduleDAO _dataAccess;
 
-  ScheduleManager(this.dataAccess, this.limit);
+  ScheduleManager(this._dataAccess, this._limit);
 
   Future<List<Schedule>> get schedules async {
     print('getting schedule list');
-    return (await dataAccess.scheduleMap).values.toList();
+    return (await _dataAccess.scheduleMap).values.toList();
   }
 
   Future<int> get numSchedules async => (await schedules).length;
 
   Future<Schedule> get activeSchedule async {
-    Map _dataMap = await dataAccess.scheduleMap;
-    String? _activeName = await dataAccess.activeName;
+    Map _dataMap = await _dataAccess.scheduleMap;
+    String? _activeName = await _dataAccess.activeName;
     return _activeName == null
         ? Schedule.nullSchedule()
         : (_dataMap)[_activeName];
   }
 
   Future<void> newSchedule(Schedule schedule) async {
-    final Map<String, dynamic> _dataMap = await dataAccess.scheduleMap;
-    if (_dataMap.keys.length == limit)
-      throw MaxItemLimitException(dataNode, limit);
+    final Map<String, dynamic> _dataMap = await _dataAccess.scheduleMap;
+    if (_dataMap.keys.length == _limit)
+      throw MaxItemLimitException(dataNodeLabel, _limit);
     if (await scheduleExists(schedule.name))
-      throw DuplicateNameException(dataNode, schedule.name);
-    await dataAccess.addSchedule(schedule);
+      throw DuplicateNameException(dataNodeLabel, schedule.name);
+    await _dataAccess.addSchedule(schedule);
     await updateActive();
   }
 
@@ -174,7 +195,7 @@ class ScheduleManager {
       if ((await activeSchedule).name == oldScheduleName)
         await changeActive(newScheduleName);
       if (!(await scheduleExists(oldScheduleName)))
-        throw NotFoundException(dataNode, oldScheduleName);
+        throw NotFoundException(dataNodeLabel, oldScheduleName);
       await deleteSchedule(oldScheduleName);
     } else {
       editFields[Schedule.stmLabel] =
@@ -182,28 +203,29 @@ class ScheduleManager {
       editFields[Schedule.etmLabel] =
           Schedule.getTime(editFields[Schedule.etmLabel]).toString();
       if (!(await scheduleExists(newScheduleName)))
-        throw NotFoundException(dataNode, newScheduleName);
-      await dataAccess.updateData(newScheduleName, editFields);
+        throw NotFoundException(dataNodeLabel, newScheduleName);
+      await _dataAccess.updateData(newScheduleName, editFields);
     }
   }
 
   Future<void> deleteSchedule(String scheduleName) async {
-    final Map<String, Schedule> _scheduleMap = await dataAccess.scheduleMap;
-    if (_scheduleMap.keys.length == 0) throw MinItemLimitException(dataNode, 1);
+    final Map<String, Schedule> _scheduleMap = await _dataAccess.scheduleMap;
+    if (_scheduleMap.keys.length == 0)
+      throw MinItemLimitException(dataNodeLabel, 1);
     if (!(await scheduleExists(scheduleName, _scheduleMap)))
-      throw NotFoundException(dataNode, scheduleName);
-    await dataAccess.deleteSchedule(scheduleName);
+      throw NotFoundException(dataNodeLabel, scheduleName);
+    await _dataAccess.deleteSchedule(scheduleName);
     await updateActive();
   }
 
   Future<void> changeActive(String scheduleName) async =>
-      await dataAccess.addActive(scheduleName);
+      await _dataAccess.addActive(scheduleName);
 
   Future<void> updateActive() async {
     final List<Schedule> scheduleList = await schedules;
     switch (scheduleList.length) {
       case 0:
-        await dataAccess.deleteActive();
+        await _dataAccess.deleteActive();
         return;
       case 1:
         await changeActive(scheduleList[0].name);
@@ -216,7 +238,7 @@ class ScheduleManager {
   Future<bool> scheduleExists(String scheduleName,
       [Map<String, Schedule>? scheduleMap]) async {
     final Map<String, Schedule> _scheduleMap =
-        scheduleMap ?? await dataAccess.scheduleMap;
+        scheduleMap ?? await _dataAccess.scheduleMap;
     return _scheduleMap.containsKey(scheduleName);
   }
 }

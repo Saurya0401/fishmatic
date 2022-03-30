@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_database/firebase_database.dart' hide Query;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import './data_models.dart';
 
@@ -79,7 +80,6 @@ class ScheduleDAO {
       await activeRef.set(scheduleName);
 
   Future<void> addSchedule(Schedule newSchedule) async =>
-      // TODO: Use push() to create random IDs for auto sorting
       await schedulesRef.child(newSchedule.name).set(newSchedule.toJson());
 
   Future<void> deleteActive() async {
@@ -93,4 +93,41 @@ class ScheduleDAO {
   Future<void> updateData(
           String scheduleName, Map<String, dynamic> updateFields) async =>
       await schedulesRef.child(scheduleName).update(updateFields);
+}
+
+class FoodRecordDAO {
+  final String userID;
+  late final CollectionReference foodRecordsRef;
+
+  FoodRecordDAO(this.userID) {
+    foodRecordsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userID)
+        .collection('food_records')
+        .withConverter<FoodRecord>(
+          fromFirestore: (snapshot, _) => FoodRecord.fromJson(snapshot.data()!),
+          toFirestore: (foodRecord, _) => foodRecord.toJson(),
+        );
+  }
+
+  Future<List<double>> getRecords() async {
+    List<QueryDocumentSnapshot> records =
+        (await foodRecordsRef.orderBy('timestamp').limitToLast(100).get()).docs;
+    return List.generate(
+      records.length,
+      (index) => (records[index].data()! as FoodRecord).amount,
+      growable: false,
+    );
+  }
+
+  Future<void> addRecord(double amount) async =>
+      await foodRecordsRef.add(FoodRecord(amount));
+
+  Future<void> deleteAllRecords() async {
+    List<QueryDocumentSnapshot> records =
+        (await foodRecordsRef.orderBy('timestamp').get()).docs;
+    for (QueryDocumentSnapshot doc in records) {
+      doc.reference.delete();
+    }
+  }
 }
