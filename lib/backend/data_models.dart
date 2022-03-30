@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum ValueStatus {
   normal,
   high,
@@ -39,13 +41,28 @@ class RouteNames {
 }
 
 class Timeouts {
-  static const Duration cnxn = Duration(seconds: 20);
+  static const Duration cnxn = Duration(seconds: 30);
   static const Duration pairing = Duration(minutes: 1);
   static const Duration discovery = Duration(minutes: 2);
+  static const Duration setupWait = Duration(minutes: 2);
   static const Duration checkSetup = Duration(minutes: 1);
   static const Duration enableSetup = Duration(seconds: 30);
 
   Duration timeout(int seconds) => Duration(seconds: seconds);
+}
+
+class FoodRecord {
+  final double amount;
+
+  FoodRecord(this.amount);
+
+  FoodRecord.fromJson(Map<String, Object?> json)
+      : this.amount = json['amount'] as double;
+
+  Map<String, Object?> toJson() => {
+        'timestamp': FieldValue.serverTimestamp(),
+        'amount': amount,
+      };
 }
 
 class LightFlags {
@@ -141,7 +158,7 @@ class Schedule {
 
 class SetupCredential {
   static const String sep = ',';
-  static const String end = ';';
+  static const String end = '\n';
 
   final String wifiSSID;
   final String wifiPass;
@@ -152,9 +169,8 @@ class SetupCredential {
       this.wifiSSID, this.wifiPass, this.userEmail, this.userPass);
 
   String get payload =>
-      <String>[
-        <String>[wifiSSID, wifiPass].join(sep),
-        <String>[userEmail, userPass].join(sep),
-      ].join(end) +
-      '\n';
+      <String>[wifiSSID, wifiPass].join(sep) +
+      end +
+      <String>[userEmail, userPass].join(sep) +
+      end;
 }
