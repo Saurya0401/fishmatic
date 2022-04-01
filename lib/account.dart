@@ -1,6 +1,7 @@
-import 'package:fishmatic/backend/data_models.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import './backend/data_models.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({Key? key, required this.fbAuth}) : super(key: key);
@@ -156,6 +157,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                       ),
                       TextField(
+                        key: Key('signup_email_field'),
                         enabled: !_signingUp,
                         controller: _emailCtrl!,
                         decoration: InputDecoration(
@@ -171,6 +173,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                       ),
                       TextField(
+                        key: Key('signup_password_field'),
                         enabled: !_signingUp,
                         controller: _passCtrl!,
                         obscureText: true,
@@ -187,6 +190,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         ),
                       ),
                       TextField(
+                        key: Key('signup_confirm_field'),
                         enabled: !_signingUp,
                         controller: _confCtrl!,
                         obscureText: true,
@@ -235,9 +239,10 @@ class _SignUpPageState extends State<SignUpPage> {
 }
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({Key? key}) : super(key: key);
+  const LoginPage({Key? key, this.testAuth}) : super(key: key);
 
   static const route = RouteNames.login;
+  final FirebaseAuth? testAuth;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -273,7 +278,10 @@ class _LoginPageState extends State<LoginPage> {
           email: _emailCtrl!.text,
           password: _passCtrl!.text,
         );
-        Navigator.pushReplacementNamed(context, RouteNames.home);
+        if (widget.testAuth != null)
+          Navigator.pop(context);
+        else
+          Navigator.pushReplacementNamed(context, RouteNames.home);
       } on FirebaseAuthException catch (error) {
         if (error.code == 'user-not-found') {
           _showError('User not found, please sign-up');
@@ -294,7 +302,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void initState() {
-    _fbAuth = FirebaseAuth.instance;
+    _fbAuth = widget.testAuth ?? FirebaseAuth.instance;
     _emailCtrl = TextEditingController();
     _passCtrl = TextEditingController();
     super.initState();
@@ -348,6 +356,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       TextField(
+                        key: Key('login_email_field'),
                         enabled: !_loggingIn,
                         controller: _emailCtrl!,
                         decoration: InputDecoration(
@@ -363,6 +372,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       TextField(
+                        key: Key('login_password_field'),
                         enabled: !_loggingIn,
                         controller: _passCtrl!,
                         obscureText: true,
@@ -407,7 +417,7 @@ class _LoginPageState extends State<LoginPage> {
                                             ),
                                           ),
                                         ),
-                                child: Text('Sign Up'),
+                                child: Text('Sign In'),
                               ),
                             ),
                           ),
