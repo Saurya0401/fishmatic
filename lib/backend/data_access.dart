@@ -10,7 +10,7 @@ class GenericDAO<T> {
   GenericDAO(String userID, String dataNode) {
     baseRef = FirebaseDatabase.instance
         .ref()
-        .child('users_test')
+        .child('users')
         .child(userID)
         .child(dataNode);
   }
@@ -53,12 +53,12 @@ class ScheduleDAO {
   ScheduleDAO(this.userID) {
     schedulesRef = FirebaseDatabase.instance
         .ref()
-        .child('users_test')
+        .child('users')
         .child(userID)
         .child('schedules');
     activeRef = FirebaseDatabase.instance
         .ref()
-        .child('users_test')
+        .child('users')
         .child(userID)
         .child('active_schedule');
   }
