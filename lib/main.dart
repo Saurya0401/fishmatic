@@ -51,10 +51,19 @@ class _FishmaticAppState extends State<FishmaticApp> {
       theme: ThemeData.dark(),
       darkTheme: ThemeData.dark(),
       debugShowCheckedModeBanner: true,
+      onGenerateRoute: (RouteSettings settings) {
+        print('build route for ${settings.name}');
+        var routes = <String, WidgetBuilder>{
+          RouteNames.setup: (_) =>
+              SetupPage(fishmatic: settings.arguments as Fishmatic),
+        };
+        WidgetBuilder builder = routes[settings.name]!;
+        return MaterialPageRoute(builder: (_) => builder(_));
+      },
       routes: <String, WidgetBuilder>{
         RouteNames.home: (_) => HomePage(),
         RouteNames.login: (_) => LoginPage(),
-        RouteNames.setup: (_) => SetupPage(),
+        // RouteNames.setup: (_) => SetupPage(),
       },
       home: FutureBuilder<bool>(
         future: _futureCheckSignedIn,
@@ -108,7 +117,7 @@ class _HomePageState extends State<HomePage> {
     _foodCtrl = TextEditingController();
     _futureFismaticInitialised = _initFishmatic();
     _setupTimer = Timer.periodic(Timeouts.checkSetup, (timer) async {
-      await _fishmatic!.testConnection();
+      await _fishmatic!.testConnection(DeviceNames.sensor);
     });
     super.initState();
   }
@@ -212,8 +221,8 @@ class _HomePageState extends State<HomePage> {
         .asBroadcastStream();
     _activeSchedule = _getActiveSchedule();
     _espConnected = CombineLatestStream.combine2(
-        _fishmatic!.onSetupMode,
-        _fishmatic!.notConnected,
+        _fishmatic!.sensorOnSetupMode,
+        _fishmatic!.sensorNotConnected,
         (bool a, bool b) => [a, b]).asBroadcastStream();
     _loggedIn = _fishmatic!.checkLoggedIn(_fbAuth!).asBroadcastStream();
   }
@@ -484,7 +493,7 @@ class _HomePageState extends State<HomePage> {
         'Setup Required',
         'Your fish feeder needs to be set up for full functionality.',
         RouteNames.setup,
-        _fishmatic);
+        _fishmatic!);
   }
 
   StreamBuilder<List<StreamData>> _valuesStreamBuilder() {
