@@ -7,8 +7,8 @@ import './data_models.dart';
 class GenericDAO<T> {
   late final DatabaseReference baseRef;
 
-  GenericDAO(String userID, String dataNode) {
-    baseRef = FirebaseDatabase.instance
+  GenericDAO(String userID, String dataNode, {FirebaseDatabase? testDB}) {
+    baseRef = (testDB ?? FirebaseDatabase.instance)
         .ref()
         .child('users')
         .child(userID)
@@ -50,13 +50,13 @@ class ScheduleDAO {
   late final DatabaseReference schedulesRef;
   late final DatabaseReference activeRef;
 
-  ScheduleDAO(this.userID) {
-    schedulesRef = FirebaseDatabase.instance
+  ScheduleDAO(this.userID, {FirebaseDatabase? testDB}) {
+    schedulesRef = (testDB ?? FirebaseDatabase.instance)
         .ref()
         .child('users')
         .child(userID)
         .child('schedules');
-    activeRef = FirebaseDatabase.instance
+    activeRef = (testDB ?? FirebaseDatabase.instance)
         .ref()
         .child('users')
         .child(userID)
@@ -99,8 +99,8 @@ class FoodRecordDAO {
   final String userID;
   late final CollectionReference foodRecordsRef;
 
-  FoodRecordDAO(this.userID) {
-    foodRecordsRef = FirebaseFirestore.instance
+  FoodRecordDAO(this.userID, {FirebaseFirestore? testDB}) {
+    foodRecordsRef = (testDB ?? FirebaseFirestore.instance)
         .collection('users')
         .doc(userID)
         .collection('food_records')
