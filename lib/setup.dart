@@ -183,25 +183,6 @@ class _SetupPageState extends State<SetupPage> {
     );
   }
 
-  Future<void> _test() async {
-    await Future.doWhile(() async {
-      await Future.delayed(Duration(seconds: 5));
-      bool setupStatus = !((await _fishmatic!.noCnxnSensor.flag == false) &&
-          (await _fishmatic!.setupSensor.flag == false));
-      print('no cnxn: ${await _fishmatic!.noCnxnSensor.flag == false}');
-      print('setup: ${await _fishmatic!.setupSensor.flag == false}');
-      print('setup done: $setupStatus');
-      // if (setupDone) _endCnxn(espCnxn);
-      return setupStatus;
-    }).timeout(
-      Timeouts.setupWait,
-      onTimeout: () {
-        // _endCnxn(espCnxn);
-        throw SetupException('setup timed out');
-      },
-    );
-  }
-
   void _endCnxn(BluetoothConnection? _espCnxn) {
     print("disposing connection");
     _espCnxn?.dispose();
@@ -387,13 +368,6 @@ class _SetupPageState extends State<SetupPage> {
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: 88,
-                        child: ElevatedButton(
-                          onPressed: () async => await _test(),
-                          child: Text('Test'),
                         ),
                       ),
                       if (_statusText != null)
