@@ -5,7 +5,7 @@ import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:fishmatic/account.dart';
 
 void main() {
-  testWidgets('Sign In Test', (tester) async {
+  testWidgets('Login Test', (tester) async {
     MockFirebaseAuth testAuth = MockFirebaseAuth(
         mockUser: MockUser(uid: 'test_user', email: 'test@test.com'));
     await tester.pumpWidget(MaterialApp(home: LoginPage(testAuth: testAuth)));
