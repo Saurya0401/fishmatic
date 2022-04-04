@@ -491,7 +491,9 @@ class _HomePageState extends State<HomePage> {
   Column _setupRequired() {
     return _userActionRequired(
         'Setup Required',
-        'Your fish feeder needs to be set up for full functionality.',
+        'Your fish feeder needs to be set up for full functionality.' +
+            '\n' +
+            'If you have completed setup before, fish feeding will continue according to the last active schedule.',
         RouteNames.setup,
         _fishmatic!);
   }
