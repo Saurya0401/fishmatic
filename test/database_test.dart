@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:firebase_database/firebase_database.dart';
 import 'package:fishmatic/backend/data_models.dart';
 import 'package:test/test.dart';
 import 'package:firebase_database_mocks/firebase_database_mocks.dart';
@@ -31,8 +30,6 @@ void initTestRTDB(String userID) {
   MockFirebaseDatabase.instance.ref().set(testData);
   print('Test database initialised');
 }
-
-void initTestFirestore(String userID) {}
 
 void main() {
   final String userID = 'test_user';
