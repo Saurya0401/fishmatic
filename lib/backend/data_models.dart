@@ -167,13 +167,13 @@ class SetupCredential {
   static const String sep = ',';
   static const String end = ';';
 
-  final String wifiSSID;
-  final String wifiPass;
   final String userEmail;
   final String userPass;
+  final String wifiSSID;
+  final String wifiPass;
 
   const SetupCredential(
-      this.wifiSSID, this.wifiPass, this.userEmail, this.userPass);
+      this.userEmail, this.userPass, this.wifiSSID, this.wifiPass);
 
   String get payload =>
       <String>[userEmail, userPass].join(sep) +
