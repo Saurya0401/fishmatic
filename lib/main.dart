@@ -15,6 +15,7 @@ import './schedule.dart';
 import './utils.dart';
 
 // TODO: Wrapper function for Exception handling (network, auth, null data)
+// TODO: Change and forgot password
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,10 +53,9 @@ class _FishmaticAppState extends State<FishmaticApp> {
       darkTheme: ThemeData.dark(),
       debugShowCheckedModeBanner: true,
       onGenerateRoute: (RouteSettings settings) {
-        print('build route for ${settings.name}');
         var routes = <String, WidgetBuilder>{
           RouteNames.setup: (_) =>
-              SetupPage(fishmatic: settings.arguments as Fishmatic),
+              SetupPage(setupArgs: settings.arguments as SetupArgs),
         };
         WidgetBuilder builder = routes[settings.name]!;
         return MaterialPageRoute(builder: (_) => builder(_));
@@ -63,7 +63,6 @@ class _FishmaticAppState extends State<FishmaticApp> {
       routes: <String, WidgetBuilder>{
         RouteNames.home: (_) => HomePage(),
         RouteNames.login: (_) => LoginPage(),
-        // RouteNames.setup: (_) => SetupPage(),
       },
       home: FutureBuilder<bool>(
         future: _futureCheckSignedIn,
@@ -99,12 +98,14 @@ class _HomePageState extends State<HomePage> {
   StatusMonitor? _statusMonitor;
   ScheduleManager? _scheduleManager;
   TextEditingController? _foodCtrl;
-  Stream<List<StreamData>>? _valuesStream;
+  Stream<List<StreamData>>? _combinedDataStream;
   Stream<List<bool>>? _espConnected;
   Stream<bool>? _loggedIn;
+  List<Stream<dynamic>?> _activeStreams = [];
   Future<Schedule>? _activeSchedule;
   ListTile? _tempNotif, _foodNotif;
   Timer? _setupTimer;
+  bool _skipSetupTimerReset = false;
   double _waterTemp = 0.0;
   double _foodLevel = 0.0;
   ValueStatus _lightLevelStatus = ValueStatus.normal;
@@ -116,17 +117,14 @@ class _HomePageState extends State<HomePage> {
     _fbAuth = FirebaseAuth.instance;
     _foodCtrl = TextEditingController();
     _futureFismaticInitialised = _initFishmatic();
-    _setupTimer = Timer.periodic(Timeouts.checkSetup, (timer) async {
-      await _fishmatic!.testConnection(DeviceNames.sensor);
-    });
     super.initState();
   }
 
   @override
   void dispose() {
     _drainStreams();
+    _cancelSetupTimer();
     _foodCtrl?.dispose();
-    _setupTimer?.cancel();
     super.dispose();
   }
 
@@ -143,6 +141,7 @@ class _HomePageState extends State<HomePage> {
       _scheduleManager = _fishmatic!.scheduleManager;
       print('Fishmatic, status monitor and schedule manager initialised.');
       _initFutures();
+      _initStreams();
       return true;
     } on ConnectionTimeout catch (error) {
       Future.delayed(
@@ -188,7 +187,7 @@ class _HomePageState extends State<HomePage> {
           context: context,
           builder: (_) => errorAlert(
             error,
-            title: "Server Error",
+            title: 'Server Error',
             context: context,
           ),
         ),
@@ -198,43 +197,67 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _initFutures() {
-    _valuesStream = CombineLatestStream.combine3(
-            _statusMonitor!.getValueStream(
-              DataNodes.waterTemp,
-              maxWarning: Limits.highTemp,
-              maxCritical: Limits.criticalHighTemp,
-              minWarning: Limits.lowTemp,
-              minCritical: Limits.criticalLowTemp,
-            ),
-            _statusMonitor!.getValueStream(
-              DataNodes.foodLevel,
-              minWarning: Limits.lowFood,
-              minCritical: Limits.criticalLowFood,
-              isFoodLevel: true,
-            ),
-            _statusMonitor!.getValueStream(
-              DataNodes.lightLevel,
-              minCritical: Limits.criticalLowLight.toDouble(),
-              maxCritical: Limits.criticalHighLight.toDouble(),
-            ),
-            (StreamData a, StreamData b, StreamData c) => [a, b, c])
-        .asBroadcastStream();
     _activeSchedule = _getActiveSchedule();
-    _espConnected = CombineLatestStream.combine2(
-        _fishmatic!.sensorOnSetupMode,
-        _fishmatic!.sensorNotConnected,
-        (bool a, bool b) => [a, b]).asBroadcastStream();
+  }
+
+  void _initStreams() {
+    List<Stream<StreamData>> _dataStreams = [
+      _statusMonitor!.getDataStream(
+        DataNodes.waterTemp,
+        maxWarning: Limits.highTemp,
+        maxCritical: Limits.criticalHighTemp,
+        minWarning: Limits.lowTemp,
+        minCritical: Limits.criticalLowTemp,
+      ),
+      _statusMonitor!.getDataStream(
+        DataNodes.foodLevel,
+        minWarning: Limits.lowFood,
+        minCritical: Limits.criticalLowFood,
+        isFoodLevel: true,
+      ),
+      _statusMonitor!.getDataStream(
+        DataNodes.lightLevel,
+        minCritical: Limits.criticalLowLight.toDouble(),
+        maxCritical: Limits.criticalHighLight.toDouble(),
+      ),
+    ];
+    List<Stream<bool>> _espStatusStreams = [
+      _fishmatic!.sensorOnSetupMode.asBroadcastStream(),
+      _fishmatic!.sensorNotConnected.asBroadcastStream(),
+      _fishmatic!.actuatorOnSetupMode.asBroadcastStream(),
+      _fishmatic!.actuatorNotConnected.asBroadcastStream(),
+    ];
+    _combinedDataStream =
+        CombineLatestStream.list(_dataStreams).asBroadcastStream();
+    _espConnected =
+        CombineLatestStream.list(_espStatusStreams).asBroadcastStream();
     _loggedIn = _fishmatic!.checkLoggedIn(_fbAuth!).asBroadcastStream();
+    _activeStreams.addAll([..._dataStreams, ..._espStatusStreams, _loggedIn]);
   }
 
   void _refresh() {
-    setState(() => _initFutures());
+    _skipSetupTimerReset = true;
+    setState(() {
+      _initFutures();
+    });
+  }
+
+  void _cancelSetupTimer() {
+    _setupTimer?.cancel();
+    _setupTimer = null;
+    print('setup mode timer cancelled');
+  }
+
+  void _restartSetupTimer() {
+    _cancelSetupTimer();
+    _setupTimer = Timer.periodic(Timeouts.checkSetup, (timer) async {
+      await _fishmatic!.testConnection(DeviceNames.sensor);
+    });
+    print('setup mode timer restarted');
   }
 
   void _drainStreams() {
-    _loggedIn?.drain();
-    _espConnected?.drain();
-    _valuesStream?.drain();
+    _activeStreams.forEach((stream) async => await stream?.drain());
   }
 
   void _updateTempNotif() {
@@ -459,7 +482,7 @@ class _HomePageState extends State<HomePage> {
             child: Text(
               info,
               style: TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.justify,
             ),
           ),
         ),
@@ -488,20 +511,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Column _setupRequired() {
+  Column _setupRequired(bool sensorSetup, bool actuatorSetup) {
     return _userActionRequired(
         'Setup Required',
         'Your fish feeder needs to be set up for full functionality.' +
-            '\n' +
+            '\n\n' +
             'If you have completed setup before, fish feeding will continue according to the last active schedule.',
         RouteNames.setup,
-        _fishmatic!);
+        SetupArgs(_fishmatic!, sensorSetup, actuatorSetup));
   }
 
   StreamBuilder<List<StreamData>> _valuesStreamBuilder() {
-    print('building values stream');
     return StreamBuilder<List<StreamData>>(
-      stream: _valuesStream!,
+      stream: _combinedDataStream!,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
           final StreamData _tempData = snapshot.data![0];
@@ -837,6 +859,7 @@ class _HomePageState extends State<HomePage> {
               );
               break;
             case 3:
+              _drainStreams();
               _fbAuth!.signOut().then((_) => Navigator.pushReplacementNamed(
                     context,
                     '/login',
@@ -1109,8 +1132,19 @@ class _HomePageState extends State<HomePage> {
                     builder: (context, snapshot) {
                       if (snapshot.hasData) {
                         if (snapshot.data != null) {
-                          bool needsSetup =
+                          bool sensorSetup =
                               snapshot.data![0] && snapshot.data![1];
+                          bool actuatorSetup =
+                              snapshot.data![2] && snapshot.data![3];
+                          bool needsSetup = sensorSetup || actuatorSetup;
+                          if (!_skipSetupTimerReset) {
+                            if (needsSetup)
+                              _cancelSetupTimer();
+                            else
+                              _restartSetupTimer();
+                          } else {
+                            _skipSetupTimerReset = false;
+                          }
                           return Scaffold(
                             appBar: AppBar(
                               title: Text(
@@ -1133,7 +1167,10 @@ class _HomePageState extends State<HomePage> {
                                         )
                                       : needsSetup
                                           ? Center(
-                                              child: _setupRequired(),
+                                              child: _setupRequired(
+                                                sensorSetup,
+                                                actuatorSetup,
+                                              ),
                                             )
                                           : Column(
                                               mainAxisSize: MainAxisSize.min,
