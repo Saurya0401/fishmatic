@@ -22,7 +22,9 @@ class Fishmatic {
   late final FoodRecordsManager foodRecordsManager;
 
   Stream<bool> get sensorOnSetupMode => setupSensor.flagStream;
+  Stream<bool> get actuatorOnSetupMode => setupActuator.flagStream;
   Stream<bool> get sensorNotConnected => noCnxnSensor.flagStream;
+  Stream<bool> get actuatorNotConnected => noCnxnActuator.flagStream;
 
   Fishmatic(this.userID) {
     lightOn = Flag(GenericDAO<bool>(userID, DataNodes.lightOn));
@@ -256,6 +258,14 @@ class ScheduleManager {
   }
 }
 
+class SetupArgs {
+  final Fishmatic fishmatic;
+  final bool sensorSetup;
+  final bool actuatorSetup;
+
+  SetupArgs(this.fishmatic, this.sensorSetup, this.actuatorSetup);
+}
+
 class StatusMonitor {
   final StatusDAO _dataAccess;
 
@@ -267,7 +277,7 @@ class StatusMonitor {
     await _dataAccess.init(0, DataNodes.lightLevel);
   }
 
-  Stream<StreamData> getValueStream(
+  Stream<StreamData> getDataStream(
     String dataNode, {
     double? maxWarning,
     double? minWarning,
