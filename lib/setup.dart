@@ -7,19 +7,20 @@ import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 import './backend/data_models.dart';
 import './backend/exceptions.dart';
-import './backend/fishmatic.dart' show Fishmatic;
+import './backend/fishmatic.dart' show Fishmatic, SetupArgs;
 
 class SetupPage extends StatefulWidget {
-  const SetupPage({Key? key, required this.fishmatic}) : super(key: key);
+  const SetupPage({Key? key, required this.setupArgs}) : super(key: key);
 
   static const route = RouteNames.setup;
-  final Fishmatic fishmatic;
+  final SetupArgs setupArgs;
 
   @override
   State<SetupPage> createState() => _SetupPageState();
 }
 
 class _SetupPageState extends State<SetupPage> {
+  SetupArgs? _setupArgs;
   Fishmatic? _fishmatic;
   TextEditingController? _wifiSsidCtrl, _wifiPassCtrl;
   TextEditingController? _userEmailCtrl, _userPassCtrl;
@@ -29,7 +30,8 @@ class _SetupPageState extends State<SetupPage> {
   Stream<BluetoothDiscoveryResult>? _deviceDiscovery;
   List<BluetoothDiscoveryResult> _discoveryResults =
       List<BluetoothDiscoveryResult>.empty(growable: true);
-  bool _retrySetup = true;
+  bool _isDiscovering = false;
+  bool _retrySetup = false;
   bool _settingUp = false;
   bool _validSSID = true;
   bool _validEmail = true;
@@ -59,34 +61,60 @@ class _SetupPageState extends State<SetupPage> {
     });
     if (_validSSID && _validEmail && _validPass) {
       try {
-        if (_retrySetup) _restartDiscovery();
-        print('discovery restarted');
-        await _pairESP32(_sensor!, DeviceNames.sensor);
-        _sensorCnxn = await _connectESP32(_sensor!, DeviceNames.sensor);
-        await _transferCredentials(
-          SetupCredential(
-            _wifiSsidCtrl!.text,
-            _wifiPassCtrl!.text,
-            _userEmailCtrl!.text,
-            _userPassCtrl!.text,
-          ),
-          _sensorCnxn!,
-          DeviceNames.sensor,
-        );
-        await _waitForSetup(_sensorCnxn!, DeviceNames.sensor);
+        if (!(await FlutterBluetoothSerial.instance.isEnabled)!) {
+          await _cancelDiscovery();
+          throw BluetoothDisabledException();
+        }
+        if (_retrySetup) await _restartDiscovery();
+        if (_setupArgs!.sensorSetup) {
+          await _pairESP32(_sensor, DeviceNames.sensor);
+          _sensorCnxn = await _connectESP32(_sensor!, DeviceNames.sensor);
+          await _transferCredentials(
+            SetupCredential(
+              _userEmailCtrl!.text,
+              _userPassCtrl!.text,
+              _wifiSsidCtrl!.text,
+              _wifiPassCtrl!.text,
+            ),
+            _sensorCnxn!,
+            DeviceNames.sensor,
+          );
+          await _waitForSetup(_sensorCnxn!, DeviceNames.sensor);
+        }
+        if (_setupArgs!.actuatorSetup) {
+          await _pairESP32(_actuator!, DeviceNames.actuator);
+          _actuatorCnxn = await _connectESP32(_actuator!, DeviceNames.actuator);
+          await _transferCredentials(
+            SetupCredential(
+              _userEmailCtrl!.text,
+              _userPassCtrl!.text,
+              _wifiSsidCtrl!.text,
+              _wifiPassCtrl!.text,
+            ),
+            _actuatorCnxn!,
+            DeviceNames.actuator,
+          );
+          await _waitForSetup(_actuatorCnxn!, DeviceNames.actuator);
+        }
         setState(() {
           _settingUp = false;
           _setupSuccess = true;
           _statusText = 'Setup successful!';
         });
       } on BluetoothDisabledException catch (error) {
+        await _cancelDiscovery();
         _showError('Bluetooth Error', error.message);
       } on BluetoothConnectionError catch (error) {
+        await _cancelDiscovery();
         _showError('Connection Error', error.message);
-      } on SetupException catch (error) {
+      } on SetupException catch (error, stacktrace) {
+        await _cancelDiscovery();
         _showError('Setup Error', error.message);
-      } catch (error) {
+        print(stacktrace);
+      } catch (error, stacktrace) {
+        await _cancelDiscovery();
         _showError('Error', error.toString());
+        print(stacktrace);
       }
     }
   }
@@ -100,9 +128,25 @@ class _SetupPageState extends State<SetupPage> {
     return false;
   }
 
-  Future<void> _pairESP32(BluetoothDevice esp32, String deviceName) async {
+  Future<void> _pairESP32(BluetoothDevice? esp32, String deviceName) async {
+    // todo: fix pairing
     try {
-      bool sensorPaired = await _checkPaired(esp32)
+      setState(() => _statusText = 'Locating $deviceName ...');
+      await Future.doWhile(() async {
+        await Future.delayed(Duration(seconds: 5));
+        devices.forEach((device) {
+          print(device.address);
+          if (device.name == 'UEP15') {
+            _sensor = device;
+            print('found sensor');
+          }
+        });
+        return esp32 == null;
+      }).timeout(
+        Timeouts.discovery,
+        onTimeout: () => throw SetupException('$deviceName not found'),
+      );
+      bool sensorPaired = await _checkPaired(esp32!)
           ? true
           : (await FlutterBluetoothSerial.instance
               .bondDeviceAtAddress(esp32.address, passkeyConfirm: true))!;
@@ -156,24 +200,29 @@ class _SetupPageState extends State<SetupPage> {
     BluetoothConnection espCnxn,
     String deviceName,
   ) async {
-    late Future<bool> noConnectionFlag;
-    late Future<bool> setupModeFlag;
-    if (deviceName == DeviceNames.sensor) {
-      noConnectionFlag = _fishmatic!.noCnxnSensor.flag;
-      setupModeFlag = _fishmatic!.setupSensor.flag;
-    } else {
-      noConnectionFlag = _fishmatic!.noCnxnActuator.flag;
-      setupModeFlag = _fishmatic!.setupActuator.flag;
-    }
+    bool noConnectionFlag;
+    bool setupModeFlag;
+    setState(() => _statusText = 'Waiting for setup to complete...');
+    int secondsElapsed = 0;
     await Future.doWhile(() async {
       await Future.delayed(Duration(seconds: 5));
-      bool setupDone =
-          (await noConnectionFlag == false) && (await setupModeFlag == false);
-      print('no cnxn: ${await noConnectionFlag == false}');
-      print('setup: ${await setupModeFlag == false}');
-      print('setup done: $setupDone');
-      if (setupDone) _endCnxn(espCnxn);
-      return setupDone;
+      secondsElapsed += 5;
+      if (secondsElapsed > 125) {
+        return false;
+      }
+      if (deviceName == DeviceNames.sensor) {
+        noConnectionFlag = await _fishmatic!.noCnxnSensor.flag;
+        setupModeFlag = await _fishmatic!.setupSensor.flag;
+      } else {
+        noConnectionFlag = await _fishmatic!.noCnxnActuator.flag;
+        setupModeFlag = await _fishmatic!.setupActuator.flag;
+      }
+      bool setupOngoing = noConnectionFlag || setupModeFlag;
+      print('no cnxn: $noConnectionFlag');
+      print('setup: $setupModeFlag');
+      print('setup done: $setupOngoing');
+      if (!setupOngoing) _endCnxn(espCnxn);
+      return setupOngoing;
     }).timeout(
       Timeouts.setupWait,
       onTimeout: () {
@@ -183,8 +232,34 @@ class _SetupPageState extends State<SetupPage> {
     );
   }
 
+  Future<void> _restartDiscovery() async {
+    await _cancelDiscovery();
+    setState(() {
+      _endCnxn(_sensorCnxn);
+      _endCnxn(_actuatorCnxn);
+      _discoveryResults.clear();
+      _statusText = 'Restarting discovery';
+      _sensor = null;
+      _actuator = null;
+      _startDiscovery();
+    });
+  }
+
+  Future<void> _cancelDiscovery() async {
+    if (_isDiscovering) {
+      await FlutterBluetoothSerial.instance.cancelDiscovery();
+      _isDiscovering = false;
+    }
+  }
+
+  void _startDiscovery() {
+    if (!_isDiscovering) {
+      _deviceDiscovery = FlutterBluetoothSerial.instance.startDiscovery();
+      _isDiscovering = true;
+    }
+  }
+
   void _endCnxn(BluetoothConnection? _espCnxn) {
-    print("disposing connection");
     _espCnxn?.dispose();
     _espCnxn = null;
   }
@@ -198,32 +273,22 @@ class _SetupPageState extends State<SetupPage> {
     });
   }
 
-  void _restartDiscovery() {
-    print('restarting...');
-    setState(() {
-      _endCnxn(_sensorCnxn);
-      _endCnxn(_actuatorCnxn);
-      _discoveryResults.clear();
-      _statusText = 'Restarting discovery';
-      _sensor = null;
-      _actuator = null;
-      _deviceDiscovery = FlutterBluetoothSerial.instance.startDiscovery();
-    });
-  }
-
   @override
   void initState() {
-    _fishmatic = widget.fishmatic;
-    _deviceDiscovery = FlutterBluetoothSerial.instance.startDiscovery();
+    _setupArgs = widget.setupArgs;
+    _fishmatic = _setupArgs!.fishmatic;
     _userEmailCtrl = TextEditingController();
     _userPassCtrl = TextEditingController();
     _wifiSsidCtrl = TextEditingController();
     _wifiPassCtrl = TextEditingController(text: '');
+    _startDiscovery();
     super.initState();
   }
 
   @override
   void dispose() {
+    Future.delayed(Duration.zero, () async => await _cancelDiscovery());
+    FlutterBluetoothSerial.instance.setPairingRequestHandler(null);
     _endCnxn(_sensorCnxn);
     _endCnxn(_actuatorCnxn);
     _userEmailCtrl?.dispose();
@@ -362,7 +427,9 @@ class _SetupPageState extends State<SetupPage> {
                                               : await _setup(),
                                           child: _setupSuccess
                                               ? Icon(Icons.arrow_forward)
-                                              : Text('Setup'),
+                                              : Text(_retrySetup
+                                                  ? 'Retry'
+                                                  : 'Setup'),
                                         ),
                                       ),
                               ),
