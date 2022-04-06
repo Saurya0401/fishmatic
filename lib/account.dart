@@ -286,7 +286,7 @@ class _LoginPageState extends State<LoginPage> {
         if (error.code == 'user-not-found') {
           _showError('User not found, please sign-up');
         } else if (error.code == 'wrong-password') {
-          _showError('Incorrect password');
+          _showError('Incorrect email or password');
         }
       }
     }
