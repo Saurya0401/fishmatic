@@ -417,7 +417,7 @@ class _LoginPageState extends State<LoginPage> {
                                             ),
                                           ),
                                         ),
-                                child: Text('Sign In'),
+                                child: Text('Sign Up'),
                               ),
                             ),
                           ),
