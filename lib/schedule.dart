@@ -7,22 +7,22 @@ import 'package:fishmatic/backend/data_models.dart' show Schedule, Timeouts;
 import 'package:fishmatic/utils.dart';
 
 class SchedulesPage extends StatefulWidget {
-  const SchedulesPage(this._sManager, {Key? key}) : super(key: key);
+  const SchedulesPage(this.sManager, this.frm, {Key? key}) : super(key: key);
 
-  final ScheduleManager _sManager;
+  final ScheduleManager sManager;
+  final FoodRecordsManager frm;
 
   @override
-  _SchedulesPageState createState() => _SchedulesPageState(_sManager);
+  _SchedulesPageState createState() => _SchedulesPageState(sManager, frm);
 }
 
 class _SchedulesPageState extends State<SchedulesPage> {
-  late final ScheduleManager _sManager;
+  final ScheduleManager _sManager;
+  final FoodRecordsManager _frm;
   late Future<List<Schedule>> _schedules;
   bool _refresh = true;
 
-  _SchedulesPageState(ScheduleManager sManager) {
-    _sManager = sManager;
-  }
+  _SchedulesPageState(this._sManager, this._frm);
 
   @override
   void initState() {
@@ -103,6 +103,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
                   context: context,
                   builder: (_) => ScheduleDialog(
                         _sManager,
+                        _frm,
                         initial: schedule,
                       )).then((_) {
                 setState(() {});
@@ -218,7 +219,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
           _refresh = false;
           showDialog(
               context: context,
-              builder: (_) => ScheduleDialog(_sManager)).then((_) {
+              builder: (_) => ScheduleDialog(_sManager, _frm)).then((_) {
             _refresh = true;
             setState(() {});
           });
@@ -231,28 +232,32 @@ class _SchedulesPageState extends State<SchedulesPage> {
 }
 
 class ScheduleDialog extends StatefulWidget {
-  const ScheduleDialog(this.sm, {Key? key, this.initial}) : super(key: key);
+  const ScheduleDialog(this.sm, this.frm, {Key? key, this.initial})
+      : super(key: key);
 
   final ScheduleManager sm;
+  final FoodRecordsManager frm;
   final Schedule? initial;
 
   @override
-  _ScheduleDialogState createState() => _ScheduleDialogState(sm, initial);
+  _ScheduleDialogState createState() => _ScheduleDialogState(sm, frm, initial);
 }
 
 class _ScheduleDialogState extends State<ScheduleDialog> {
   final ScheduleManager _sm;
+  final FoodRecordsManager _frm;
   final Schedule? _initial;
   late final TextEditingController _nameCtrl, _intervalCtrl, _foodCtrl;
   late String _startHour;
   late String _startMinute;
   late String _endHour;
   late String _endMinute;
+  String? _autoFoodError;
   bool _addingSchedule = false;
   bool _scheduleEdited = false;
   bool _validName = true, _validInterval = true, _validFood = true;
 
-  _ScheduleDialogState(this._sm, this._initial);
+  _ScheduleDialogState(this._sm, this._frm, this._initial);
 
   @override
   void initState() {
@@ -477,16 +482,24 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                           controller: _foodCtrl,
                           decoration: InputDecoration(
                               hintText: 'Enter food amount',
-                              errorText: _validFood
-                                  ? null
-                                  : 'Please enter a valid amount'),
+                              errorText: _autoFoodError ??
+                                  (_validFood
+                                      ? null
+                                      : 'Please enter a valid amount')),
                         ),
                       ),
                       Flexible(
                         flex: 2,
                         fit: FlexFit.loose,
                         child: TextButton(
-                          onPressed: () {},
+                          onPressed: () async {
+                            double autoAmount = await _frm.calcOptimalAmount();
+                            if (autoAmount <= 0)
+                              setState(() => _autoFoodError =
+                                  'Not enough data to calculate optimal amount!');
+                            else
+                              _foodCtrl.text = autoAmount.toStringAsFixed(1);
+                          },
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: Text('Auto'),
@@ -515,6 +528,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                 : () async {
                     setState(() {
                       _validName = _validInterval = _validFood = true;
+                      _autoFoodError = null;
                       if (_nameCtrl.text.isEmpty ||
                           double.tryParse(_nameCtrl.text) != null)
                         _validName = false;
