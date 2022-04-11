@@ -105,12 +105,10 @@ class _SetupPageState extends State<SetupPage> {
         _showError('Bluetooth Error', error.message);
       } on BluetoothConnectionError catch (error) {
         _showError('Connection Error', error.message);
-      } on SetupException catch (error, stacktrace) {
+      } on SetupException catch (error) {
         _showError('Setup Error', error.message);
-        print(stacktrace);
-      } catch (error, stacktrace) {
+      } catch (error) {
         _showError('Error', error.toString());
-        print(stacktrace);
       } finally {
         await _cancelDiscovery();
       }
