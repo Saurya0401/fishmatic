@@ -82,7 +82,7 @@ class _SetupPageState extends State<SetupPage> {
           await _waitForSetup(_sensorCnxn!, DeviceNames.sensor);
         }
         if (_setupArgs!.actuatorSetup) {
-          await _pairESP32(_actuator!, DeviceNames.actuator);
+          await _pairESP32(_actuator, DeviceNames.actuator);
           _actuatorCnxn = await _connectESP32(_actuator!, DeviceNames.actuator);
           await _transferCredentials(
             SetupCredential(
@@ -102,19 +102,17 @@ class _SetupPageState extends State<SetupPage> {
           _statusText = 'Setup successful!';
         });
       } on BluetoothDisabledException catch (error) {
-        await _cancelDiscovery();
         _showError('Bluetooth Error', error.message);
       } on BluetoothConnectionError catch (error) {
-        await _cancelDiscovery();
         _showError('Connection Error', error.message);
       } on SetupException catch (error, stacktrace) {
-        await _cancelDiscovery();
         _showError('Setup Error', error.message);
         print(stacktrace);
       } catch (error, stacktrace) {
-        await _cancelDiscovery();
         _showError('Error', error.toString());
         print(stacktrace);
+      } finally {
+        await _cancelDiscovery();
       }
     }
   }
@@ -129,11 +127,14 @@ class _SetupPageState extends State<SetupPage> {
   }
 
   Future<void> _pairESP32(BluetoothDevice? esp32, String deviceName) async {
-    // todo: fix pairing
     try {
+      int secondsElapsed = 0;
       setState(() => _statusText = 'Locating $deviceName ...');
       await Future.doWhile(() async {
+        print(secondsElapsed);
+        if (secondsElapsed > 120) return false;
         await Future.delayed(Duration(seconds: 5));
+        secondsElapsed += 5;
         devices.forEach((device) {
           print(device.address);
           if (device.name == 'UEP15') {
@@ -141,7 +142,10 @@ class _SetupPageState extends State<SetupPage> {
             print('found sensor');
           }
         });
-        return esp32 == null;
+        if (deviceName == DeviceNames.sensor)
+          return _sensor == null;
+        else
+          return _actuator == null;
       }).timeout(
         Timeouts.discovery,
         onTimeout: () => throw SetupException('$deviceName not found'),
@@ -149,7 +153,7 @@ class _SetupPageState extends State<SetupPage> {
       bool sensorPaired = await _checkPaired(esp32!)
           ? true
           : (await FlutterBluetoothSerial.instance
-              .bondDeviceAtAddress(esp32.address, passkeyConfirm: true))!;
+              .bondDeviceAtAddress(esp32.address, pin: '1234'))!;
       if (sensorPaired)
         setState(() => _statusText = 'Paired to $deviceName');
       else
@@ -207,9 +211,8 @@ class _SetupPageState extends State<SetupPage> {
     await Future.doWhile(() async {
       await Future.delayed(Duration(seconds: 5));
       secondsElapsed += 5;
-      if (secondsElapsed > 125) {
-        return false;
-      }
+      print(secondsElapsed);
+      if (secondsElapsed > 120) return false;
       if (deviceName == DeviceNames.sensor) {
         noConnectionFlag = await _fishmatic!.noCnxnSensor.flag;
         setupModeFlag = await _fishmatic!.setupSensor.flag;
@@ -218,9 +221,6 @@ class _SetupPageState extends State<SetupPage> {
         setupModeFlag = await _fishmatic!.setupActuator.flag;
       }
       bool setupOngoing = noConnectionFlag || setupModeFlag;
-      print('no cnxn: $noConnectionFlag');
-      print('setup: $setupModeFlag');
-      print('setup done: $setupOngoing');
       if (!setupOngoing) _endCnxn(espCnxn);
       return setupOngoing;
     }).timeout(
@@ -320,6 +320,16 @@ class _SetupPageState extends State<SetupPage> {
             );
           }
           return Scaffold(
+            appBar: AppBar(
+              title: Text(
+                'Fishmatic',
+                style: TextStyle(
+                  fontSize: 25.0,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+              centerTitle: true,
+            ),
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) => SingleChildScrollView(
