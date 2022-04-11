@@ -120,7 +120,7 @@ class Schedule {
       'Feeding fish every ${interval.toStringAsFixed(1)} hours';
 
   String get amountStr =>
-      'Dispensing ${amount.toStringAsFixed(1)} units of food';
+      'Dispensing ${amount.toStringAsFixed(1)}% of food';
 
   String get durationStr {
     if (sTime == eTime)

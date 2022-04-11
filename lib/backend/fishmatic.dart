@@ -74,11 +74,11 @@ class Fishmatic {
     });
   }
 
-  Future<void> feedFish(double amount, double currentLevel) async {
+  Future<void> feedFish(double foodPercent, double currentLevel) async {
     if (currentLevel <= Limits.criticalLowFood) throw CriticalFoodException();
-    final int rotationTime = (amount * (15000 / 100)).toInt();
-    await feederServo.executeCycle(rotationTime); // write servo durtaion to Firebase
-    await foodRecordsManager.addRecord(amount);   // add feeding record
+    final int rotationTime = (foodPercent * 150).toInt();
+    await feederServo.executeCycle(rotationTime);    // write servo durtaion to Firebase
+    await foodRecordsManager.addRecord(foodPercent); // add feeding record
   }
 
   Future<void> setAutoLight(bool enable, ValueStatus lightStatus) async {

@@ -957,7 +957,7 @@ class _HomePageState extends State<HomePage> {
                     child: TextField(
                       controller: _foodCtrl,
                       decoration: InputDecoration(
-                          hintText: 'Enter food amount (in %)',
+                          hintText: 'Enter food amount (%)',
                           errorText: _validFood
                               ? null
                               : 'Please enter a valid amount'),
