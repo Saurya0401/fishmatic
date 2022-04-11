@@ -47,13 +47,21 @@ class MaxItemLimitException extends FishmaticBaseException {
 
 class MinItemLimitException extends FishmaticBaseException {
   MinItemLimitException(String dataType, int minLimit)
-      : super('Min Item Error', 'Must have atleast $minLimit ${dataType}s');
+      : super('Min Item Error', 'Must have at least $minLimit ${dataType}s');
 }
 
 class CriticalFoodException extends FishmaticBaseException {
   CriticalFoodException()
       : super('Critical Food Error', 'Food level is at critical levels',
             'Feeding is suspended');
+}
+
+class NotEnoughFoodException extends FishmaticBaseException {
+  NotEnoughFoodException()
+      : super(
+            'Not Enough Food',
+            'The feeder does not have this this much food to dispense',
+            'Feeding aborted');
 }
 
 class ConnectionTimeout extends FishmaticBaseException {
