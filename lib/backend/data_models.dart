@@ -30,15 +30,15 @@ class DeviceNames {
 }
 
 class Limits {
-  static const int scheduleLimit = 5;
-  static const int criticalLowLight = 1000;
-  static const int criticalHighLight = 3000;
-  static const double lowFood = 20.0;
-  static const double criticalLowFood = 10.0;
-  static const double lowTemp = 20.0;
-  static const double criticalLowTemp = 15.0;
-  static const double highTemp = 30.0;
-  static const double criticalHighTemp = 35.0;
+  static const int scheduleLimit = 10;      // max schedules per user
+  static const int criticalLowLight = 1000; // Low light limit
+  static const double foodMul = (100 / 65); // For converting food value to %
+  static const double lowFood = 15;         // Low food limit (in mm)
+  static const double criticalLowFood = 2;  // Empty food limit (in mm)
+  static const double lowTemp = 20.0;       // Low temp limit (in C)
+  static const double criticalLowTemp = 15.0;  // Too Low temp limit (in C)
+  static const double highTemp = 30.0;      // High temp limit (in C)
+  static const double criticalHighTemp = 35.0; // Too High temp limit (in C)
 }
 
 class RouteNames {
