@@ -15,7 +15,6 @@ import './schedule.dart';
 import './utils.dart';
 
 // TODO: Wrapper function for Exception handling (network, auth, null data)
-// TODO: Change and forgot password
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -107,7 +106,7 @@ class _HomePageState extends State<HomePage> {
   Timer? _setupTimer;
   bool _skipSetupTimerReset = false;
   double _waterTemp = 0.0;
-  double _foodLevel = 0.0;
+  double _foodLevel = 0.0, _foodPercent = 0.0;
   ValueStatus _lightLevelStatus = ValueStatus.normal;
   ValueStatus _waterTempStatus = ValueStatus.normal;
   ValueStatus _foodLevelStatus = ValueStatus.normal;
@@ -218,7 +217,6 @@ class _HomePageState extends State<HomePage> {
       _statusMonitor!.getDataStream(
         DataNodes.lightLevel,
         minCritical: Limits.criticalLowLight.toDouble(),
-        maxCritical: Limits.criticalHighLight.toDouble(),
       ),
     ];
     List<Stream<bool>> _espStatusStreams = [
@@ -514,7 +512,7 @@ class _HomePageState extends State<HomePage> {
   Column _setupRequired(bool sensorSetup, bool actuatorSetup) {
     return _userActionRequired(
         'Setup Required',
-        'Your fish feeder needs to be set up for full functionality.' +
+        'Your fish feeder needs to be set up.' +
             '\n\n' +
             'If you have completed setup before, fish feeding will continue according to the last active schedule.',
         RouteNames.setup,
@@ -538,8 +536,10 @@ class _HomePageState extends State<HomePage> {
           if (_foodData.value != null && _foodData.status != null) {
             _foodLevel = _foodData.value!;
             _foodLevelStatus = _foodData.status!;
+            _foodPercent = Limits.foodMul * _foodLevel;
             _updateFoodNotif();
-            print('food level updated: ${_foodData.toString()}');
+            print(
+                'food level updated: ${_foodData.toString()} (${_foodPercent.toStringAsFixed(1)}%)');
           }
           if (_lightData.value != null && _lightData.status != null) {
             _lightLevelStatus = _lightData.status!;
@@ -586,14 +586,15 @@ class _HomePageState extends State<HomePage> {
                         child: SizedBox(
                           height: _gaugeHeight,
                           child: _getRadialGauge(
-                            title: 'Food Level',
-                            value: _foodLevel,
-                            valueStatus: _foodLevelStatus,
-                            gaugeMin: 0,
-                            gaugeMax: 100,
-                            minWarning: Limits.lowFood,
-                            minCritical: Limits.criticalLowFood,
-                          ),
+                              title: 'Food Level',
+                              value: _foodPercent,
+                              valueStatus: _foodLevelStatus,
+                              gaugeMin: 0,
+                              gaugeMax: 100,
+                              minWarning: Limits.foodMul * Limits.lowFood,
+                              minCritical:
+                                  Limits.foodMul * Limits.criticalLowFood,
+                              unit: '%'),
                         ),
                       ),
                     ),
@@ -733,6 +734,7 @@ class _HomePageState extends State<HomePage> {
                     context: context,
                     builder: (_) => ScheduleDialog(
                       _scheduleManager!,
+                      _fishmatic!.foodRecordsManager,
                       initial: _active,
                     ),
                   ).then((scheduleEdited) {
@@ -834,7 +836,10 @@ class _HomePageState extends State<HomePage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => SchedulesPage(_scheduleManager!),
+                  builder: (_) => SchedulesPage(
+                    _scheduleManager!,
+                    _fishmatic!.foodRecordsManager,
+                  ),
                 ),
               ).then((_) {
                 try {
@@ -952,7 +957,7 @@ class _HomePageState extends State<HomePage> {
                     child: TextField(
                       controller: _foodCtrl,
                       decoration: InputDecoration(
-                          hintText: 'Enter food amount',
+                          hintText: 'Enter food amount (in %)',
                           errorText: _validFood
                               ? null
                               : 'Please enter a valid amount'),
@@ -963,14 +968,13 @@ class _HomePageState extends State<HomePage> {
                     fit: FlexFit.loose,
                     child: TextButton(
                       onPressed: () async {
-                        double optimalAmount = await _fishmatic!
-                            .foodRecordsManager
+                        double autoAmount = await _fishmatic!.foodRecordsManager
                             .calcOptimalAmount();
-                        if (optimalAmount <= 0)
+                        if (autoAmount <= 0)
                           feedSetter(() => _statusText =
                               'Not enough data to calculate optimal amount!');
                         else
-                          _foodCtrl!.text = optimalAmount.toStringAsFixed(1);
+                          _foodCtrl!.text = autoAmount.toStringAsFixed(1);
                       },
                       child: Padding(
                         padding: const EdgeInsets.all(8.0),
@@ -1035,6 +1039,10 @@ class _HomePageState extends State<HomePage> {
                               _currentFocus.unfocus();
                             feedSetter(() => _isFeeding = true);
                             try {
+                              final double foodPercent =
+                                  double.parse(_foodCtrl!.text);
+                              if (foodPercent > _foodPercent)
+                                throw NotEnoughFoodException();
                               await _fishmatic!
                                   .feedFish(
                                       double.parse(_foodCtrl!.text), _foodLevel)
@@ -1044,6 +1052,11 @@ class _HomePageState extends State<HomePage> {
                               feedSetter(() {
                                 _done = true;
                                 _statusText = 'Feeding successful';
+                              });
+                            } on NotEnoughFoodException catch (e) {
+                              feedSetter(() {
+                                _fail = true;
+                                _statusText = e.errorText;
                               });
                             } on CriticalFoodException catch (e) {
                               feedSetter(() {
