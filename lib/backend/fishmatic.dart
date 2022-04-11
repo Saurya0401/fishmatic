@@ -16,7 +16,6 @@ class Fishmatic {
   late final Flag setupActuator;
   late final Flag noCnxnActuator;
   late final Servo feederServo;
-  late final Servo filterServo;
   late final StatusMonitor statusMonitor;
   late final ScheduleManager scheduleManager;
   late final FoodRecordsManager foodRecordsManager;
@@ -36,7 +35,6 @@ class Fishmatic {
     setupActuator =
         Flag(GenericDAO<bool>(userID, DataNodes.setupActuator), true);
     feederServo = Servo(GenericDAO<int>(userID, DataNodes.feederServo));
-    filterServo = Servo(GenericDAO<int>(userID, DataNodes.filterServo));
     statusMonitor = StatusMonitor(StatusDAO(userID));
     scheduleManager =
         ScheduleManager(ScheduleDAO(userID), Limits.scheduleLimit);
@@ -51,7 +49,6 @@ class Fishmatic {
     await noCnxnActuator.initialise();
     await setupActuator.initialise();
     await feederServo.initialise();
-    await filterServo.initialise();
     await statusMonitor.initialise();
   }
 
@@ -79,9 +76,9 @@ class Fishmatic {
 
   Future<void> feedFish(double amount, double currentLevel) async {
     if (currentLevel <= Limits.criticalLowFood) throw CriticalFoodException();
-    await feederServo.executeCycle(180, 0, 2);
-    await foodRecordsManager.addRecord(amount);
-    await statusMonitor.updateFoodLevel(currentLevel - amount);
+    final int rotationTime = (amount * (15000 / 100)).toInt();
+    await feederServo.executeCycle(rotationTime); // write servo durtaion to Firebase
+    await foodRecordsManager.addRecord(amount);   // add feeding record
   }
 
   Future<void> setAutoLight(bool enable, ValueStatus lightStatus) async {
@@ -142,11 +139,8 @@ class Servo {
 
   Future<void> initialise() async => _dataAccess.init(0);
 
-  Future<void> executeCycle(
-      int startAngle, int endAngle, int delaySeconds) async {
-    await _dataAccess.setValue(startAngle);
-    await Future.delayed(Duration(seconds: delaySeconds));
-    await _dataAccess.setValue(endAngle);
+  Future<void> executeCycle(int duration) async {
+    await _dataAccess.setValue(duration);
   }
 }
 
@@ -303,7 +297,4 @@ class StatusMonitor {
       return StreamData(ValueStatus.normal, _value);
     }).asBroadcastStream();
   }
-
-  Future<void> updateFoodLevel(double level) async =>
-      await _dataAccess.setChildValue(DataNodes.foodLevel, level);
 }
