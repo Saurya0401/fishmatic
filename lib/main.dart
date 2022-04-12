@@ -251,7 +251,7 @@ class _HomePageState extends State<HomePage> {
     _setupTimer = Timer.periodic(Timeouts.checkSetup, (timer) async {
       await _fishmatic!.testConnection(DeviceNames.sensor);
     });
-    print('setup mode timer restarted');
+    print('setup mode timer started');
   }
 
   void _drainStreams() {
