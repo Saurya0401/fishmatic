@@ -30,14 +30,14 @@ class DeviceNames {
 }
 
 class Limits {
-  static const int scheduleLimit = 10;      // max schedules per user
+  static const int scheduleLimit = 10; // max schedules per user
   static const int criticalLowLight = 1000; // Low light limit
   static const double foodMul = (100 / 65); // For converting food value to %
-  static const double lowFood = 15;         // Low food limit (in mm)
-  static const double criticalLowFood = 2;  // Empty food limit (in mm)
-  static const double lowTemp = 20.0;       // Low temp limit (in C)
-  static const double criticalLowTemp = 15.0;  // Too Low temp limit (in C)
-  static const double highTemp = 30.0;      // High temp limit (in C)
+  static const double lowFood = 15; // Low food limit (in mm)
+  static const double criticalLowFood = 2; // Empty food limit (in mm)
+  static const double lowTemp = 20.0; // Low temp limit (in C)
+  static const double criticalLowTemp = 15.0; // Too Low temp limit (in C)
+  static const double highTemp = 30.0; // High temp limit (in C)
   static const double criticalHighTemp = 35.0; // Too High temp limit (in C)
 }
 
@@ -119,8 +119,7 @@ class Schedule {
   String get intervalStr =>
       'Feeding fish every ${interval.toStringAsFixed(1)} hours';
 
-  String get amountStr =>
-      'Dispensing ${amount.toStringAsFixed(1)}% of food';
+  String get amountStr => 'Dispensing ${amount.toStringAsFixed(1)}% of food';
 
   String get durationStr {
     if (sTime == eTime)
@@ -139,9 +138,7 @@ class Schedule {
       : interval = json[Schedule.intLabel].toDouble(),
         amount = json[Schedule.amtLabel].toDouble(),
         sTime = DateTime.parse(json[Schedule.stmLabel]),
-        eTime = DateTime.parse(json[Schedule.etmLabel]) {
-    print('parsing Schedule from json');
-  }
+        eTime = DateTime.parse(json[Schedule.etmLabel]);
 
   Map<String, dynamic> toJson() => {
         Schedule.intLabel: interval,
